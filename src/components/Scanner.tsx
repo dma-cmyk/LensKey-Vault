@@ -149,7 +149,7 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
         <div className="space-y-4">
           <Card>
             <div className="p-5 space-y-4">
-              <label className="block text-sm font-medium text-zinc-400">復号されたシードフレーズ</label>
+              <label className="block text-sm font-medium text-zinc-400">復号された内容</label>
               <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 font-mono text-center break-all leading-relaxed select-all">
                 {decryptedSeed}
               </div>

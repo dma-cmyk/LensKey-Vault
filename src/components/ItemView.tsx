@@ -120,7 +120,7 @@ export function ItemView({ item, onBack }: ItemViewProps) {
         <Card>
           <div className="p-5 space-y-5">
             <p className="text-sm text-zinc-400 text-center py-2">
-              シードフレーズを閲覧するには認証が必要です
+              記録内容を閲覧するには認証が必要です
             </p>
 
             {/* Password */}

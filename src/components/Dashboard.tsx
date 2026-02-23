@@ -137,7 +137,7 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
           </div>
           <p className="text-zinc-500 font-medium mb-1">アイテムがまだありません</p>
           <p className="text-zinc-600 text-sm mb-6">
-            シードフレーズを追加するか、<br />バックアップQRをスキャンしてください
+            新しい記録を追加するか、<br />バックアップQRをスキャンしてください
           </p>
           <Button onClick={onAddNew}>最初のアイテムを追加</Button>
         </div>

@@ -181,7 +181,7 @@ export function CreateItem({ onBack, onSuccess }: CreateItemProps) {
         <button onClick={onBack} className="p-2 hover:bg-zinc-800 rounded-xl transition-colors">
           <ArrowLeft className="w-5 h-5 text-zinc-400" />
         </button>
-        <h2 className="text-lg font-bold" style={{ fontFamily: 'var(--font-display)' }}>新規シード登録</h2>
+        <h2 className="text-lg font-bold" style={{ fontFamily: 'var(--font-display)' }}>新規記録を登録</h2>
       </div>
 
       <Card>
@@ -206,9 +206,9 @@ export function CreateItem({ onBack, onSuccess }: CreateItemProps) {
           </div>
 
           <Input
-            label="シードフレーズ"
+            label="記録内容 / シークレット"
             type="textarea"
-            placeholder="12または24単語のシードフレーズを入力..."
+            placeholder="パスワード、シードフレーズ、秘密鍵などを入力..."
             required
             rows={4}
             className="font-mono"
