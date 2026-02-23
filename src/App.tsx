@@ -11,11 +11,17 @@ type View = 'dashboard' | 'create' | 'scan' | 'view';
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [selectedItem, setSelectedItem] = useState<VaultItem | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const navigateTo = (view: View, item: VaultItem | null = null) => {
     setSelectedItem(item);
     setCurrentView(view);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleItemUpdated = (updatedItem: VaultItem) => {
+    setSelectedItem(updatedItem);
+    setRefreshKey(prev => prev + 1);
   };
 
   return (
@@ -50,6 +56,7 @@ function App() {
       <main className="max-w-2xl mx-auto px-4 py-6 pb-24">
         {currentView === 'dashboard' && (
           <Dashboard
+            key={refreshKey}
             onAddNew={() => navigateTo('create')}
             onScan={() => navigateTo('scan')}
             onSelectItem={(item) => navigateTo('view', item)}
@@ -71,6 +78,7 @@ function App() {
           <ItemView
             item={selectedItem}
             onBack={() => navigateTo('dashboard')}
+            onItemUpdated={handleItemUpdated}
           />
         )}
       </main>

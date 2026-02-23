@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { type VaultItem } from '../lib/db';
-import { Button, Card, Input } from './UIParts';
+import { Button, Card, Input, DEFAULT_CATEGORIES } from './UIParts';
 import { decryptData } from '../lib/crypto';
 import { verifyBiometrics } from '../lib/auth';
-import { ArrowLeft, EyeOff, Key, Fingerprint, Copy, Check, AlertCircle, QrCode } from 'lucide-react';
+import { ArrowLeft, EyeOff, Key, Fingerprint, Copy, Check, AlertCircle, QrCode, Pencil } from 'lucide-react';
 import { cn } from './UIParts';
 import QRCode from 'qrcode';
 import { isWebAuthnAvailable, registerBiometrics } from '../lib/auth';
@@ -12,9 +12,10 @@ import { db } from '../lib/db';
 interface ItemViewProps {
   item: VaultItem;
   onBack: () => void;
+  onItemUpdated?: (updatedItem: VaultItem) => void;
 }
 
-export function ItemView({ item, onBack }: ItemViewProps) {
+export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
   const [password, setPassword] = useState('');
   const [decryptedSeed, setDecryptedSeed] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -24,9 +25,48 @@ export function ItemView({ item, onBack }: ItemViewProps) {
   const [qrBlobUrl, setQrBlobUrl] = useState<string | null>(null);
   const [isBioAvailable, setIsBioAvailable] = useState(false);
 
+  // Inline editing state
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitle, setEditTitle] = useState(item.title);
+  const [currentTitle, setCurrentTitle] = useState(item.title);
+  const [currentCategory, setCurrentCategory] = useState(item.category);
+  const [categories, setCategories] = useState<string[]>([]);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     isWebAuthnAvailable().then(setIsBioAvailable);
+    db.categories.orderBy('order').toArray().then(cats => {
+      const dbCats = cats.map(c => c.name);
+      setCategories([...new Set([...DEFAULT_CATEGORIES, ...dbCats])]);
+    });
   }, []);
+
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
+  const saveTitle = async () => {
+    const trimmed = editTitle.trim();
+    if (!trimmed || trimmed === currentTitle) {
+      setEditTitle(currentTitle);
+      setIsEditingTitle(false);
+      return;
+    }
+    await db.vault_items.update(item.id, { title: trimmed });
+    setCurrentTitle(trimmed);
+    setIsEditingTitle(false);
+    onItemUpdated?.({ ...item, title: trimmed, category: currentCategory });
+  };
+
+  const handleCategoryChange = async (newCategory: string) => {
+    if (newCategory === currentCategory) return;
+    await db.vault_items.update(item.id, { category: newCategory });
+    setCurrentCategory(newCategory);
+    onItemUpdated?.({ ...item, title: currentTitle, category: newCategory });
+  };
 
   useEffect(() => {
     if (decryptedSeed) {
@@ -110,9 +150,61 @@ export function ItemView({ item, onBack }: ItemViewProps) {
         <button onClick={onBack} className="p-2 hover:bg-zinc-800 rounded-xl transition-colors">
           <ArrowLeft className="w-5 h-5 text-zinc-400" />
         </button>
-        <div>
-          <h2 className="text-lg font-bold" style={{ fontFamily: 'var(--font-display)' }}>{item.title}</h2>
-          <p className="text-xs text-zinc-500">{new Date(item.createdAt).toLocaleString()}</p>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            {isEditingTitle ? (
+              <input
+                ref={titleInputRef}
+                type="text"
+                value={editTitle}
+                onChange={e => setEditTitle(e.target.value)}
+                onBlur={saveTitle}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') saveTitle();
+                  if (e.key === 'Escape') {
+                    setEditTitle(currentTitle);
+                    setIsEditingTitle(false);
+                  }
+                }}
+                className="text-lg font-bold bg-zinc-800 border border-blue-500 rounded-lg px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 w-full transition-all"
+                style={{ fontFamily: 'var(--font-display)' }}
+              />
+            ) : (
+              <h2
+                className="text-lg font-bold truncate"
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                {currentTitle}
+              </h2>
+            )}
+            <button
+              onClick={() => {
+                setEditTitle(currentTitle);
+                setIsEditingTitle(!isEditingTitle);
+              }}
+              className={cn(
+                "p-1.5 rounded-lg transition-all shrink-0",
+                isEditingTitle
+                  ? "text-blue-400 bg-blue-500/10"
+                  : "text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800"
+              )}
+              title="タイトルを編集"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <select
+              value={currentCategory}
+              onChange={e => handleCategoryChange(e.target.value)}
+              className="text-xs bg-transparent border border-transparent hover:border-zinc-700 text-zinc-500 rounded-md px-1 py-0.5 focus:outline-none focus:border-blue-500 transition-all cursor-pointer appearance-none"
+              style={{ backgroundImage: 'none' }}
+            >
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <span className="text-xs text-zinc-600">·</span>
+            <p className="text-xs text-zinc-500">{new Date(item.createdAt).toLocaleString()}</p>
+          </div>
         </div>
       </div>
 
