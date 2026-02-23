@@ -5,7 +5,7 @@ import { decryptData } from '../lib/crypto';
 import { db } from '../lib/db';
 import {
   ArrowLeft, AlertCircle, CheckCircle2, Save, Fingerprint,
-  Camera, FileImage, SwitchCamera, Loader2
+  Camera, FileImage, SwitchCamera, Loader2, ZoomIn, ZoomOut
 } from 'lucide-react';
 import { isWebAuthnAvailable, registerBiometrics } from '../lib/auth';
 
@@ -39,6 +39,10 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Zoom state
+  const [zoomRange, setZoomRange] = useState<{ min: number; max: number; step: number } | null>(null);
+  const [currentZoom, setCurrentZoom] = useState(1);
+
   useEffect(() => {
     isWebAuthnAvailable().then(setIsBioAvailable);
   }, []);
@@ -71,6 +75,8 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
       scannerRef.current = null;
     }
     setIsCameraActive(false);
+    setZoomRange(null);
+    setCurrentZoom(1);
   }, []);
 
   const startCamera = useCallback(async (cameraId: string) => {
@@ -98,6 +104,20 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
         () => {}
       );
       setIsCameraActive(true);
+
+      // Detect zoom support
+      try {
+        const caps = qr.getRunningTrackCapabilities();
+        const zoomCap = (caps as any).zoom;
+        if (zoomCap) {
+          setZoomRange({ min: zoomCap.min, max: zoomCap.max, step: zoomCap.step || 0.1 });
+          setCurrentZoom(zoomCap.min);
+        } else {
+          setZoomRange(null);
+        }
+      } catch {
+        setZoomRange(null);
+      }
     } catch (err: any) {
       setError('カメラの起動に失敗しました。カメラのアクセスを許可してください。');
       console.error(err);
@@ -293,6 +313,41 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
                 </div>
               )}
             </div>
+
+            {/* Zoom slider */}
+            {isCameraActive && zoomRange && (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <ZoomOut className="w-4 h-4 text-zinc-500 shrink-0" />
+                <input
+                  type="range"
+                  min={zoomRange.min}
+                  max={zoomRange.max}
+                  step={zoomRange.step}
+                  value={currentZoom}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setCurrentZoom(val);
+                    if (scannerRef.current?.isScanning) {
+                      // Apply zoom via the video track directly
+                      try {
+                        const video = document.querySelector('#qr-reader-region video') as HTMLVideoElement;
+                        if (video?.srcObject) {
+                          const tracks = (video.srcObject as MediaStream).getVideoTracks();
+                          if (tracks[0]) {
+                            tracks[0].applyConstraints({ advanced: [{ zoom: val } as any] });
+                          }
+                        }
+                      } catch { /* zoom not supported */ }
+                    }
+                  }}
+                  className="flex-1 h-1 rounded-full appearance-none bg-zinc-700 accent-blue-500 cursor-pointer
+                    [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full
+                    [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:shadow-lg"
+                />
+                <ZoomIn className="w-4 h-4 text-zinc-500 shrink-0" />
+                <span className="text-[11px] text-zinc-500 w-8 text-right">{currentZoom.toFixed(1)}x</span>
+              </div>
+            )}
 
             {/* Camera info */}
             {cameras.length > 0 && (
