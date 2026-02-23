@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { type VaultItem } from '../lib/db';
-import { Button, Card, Input, DEFAULT_CATEGORIES } from './UIParts';
+import { Button, Card, Input, DEFAULT_CATEGORIES, Modal } from './UIParts';
 import { decryptData, encryptData } from '../lib/crypto';
 import { verifyBiometrics } from '../lib/auth';
 import { ArrowLeft, EyeOff, Key, Fingerprint, Copy, Check, AlertCircle, QrCode, Pencil, Lock as LockIcon } from 'lucide-react';
