@@ -32,6 +32,21 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
     setNewCategory('');
   };
 
+  const handleDeleteCategory = async (name: string) => {
+    if (confirm(`カテゴリ「${name}」を削除しますか？\nこのカテゴリに属するアイテムは削除されませんが、カテゴリ表示が「その他」になります。`)) {
+      await db.categories.delete(name);
+      setCategories(prev => prev.filter(c => c !== name));
+      if (filter === name) setFilter('すべて');
+      
+      // Update existing items in background (optional, but good for UI consistency)
+      const linkedItems = await db.vault_items.where('category').equals(name).toArray();
+      for (const item of linkedItems) {
+        await db.vault_items.update(item.id, { category: 'その他' });
+      }
+      db.vault_items.toArray().then(setItems);
+    }
+  };
+
   const filteredItems = filter === 'すべて'
     ? items
     : items.filter(i => i.category === filter);
@@ -76,16 +91,40 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
         </div>
 
         {showCatSettings && (
-          <div className="flex gap-2 animate-in slide-in-from-top-2 duration-200">
-            <input 
-              type="text" 
-              placeholder="新しいカテゴリ名"
-              className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
-              value={newCategory}
-              onChange={e => setNewCategory(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
-            />
-            <Button size="sm" onClick={handleAddCategory}>追加</Button>
+          <div className="space-y-4 pt-2 border-t border-zinc-800 animate-in slide-in-from-top-2 duration-200">
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder="新しいカテゴリ名"
+                className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
+                value={newCategory}
+                onChange={e => setNewCategory(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
+              />
+              <Button size="sm" onClick={handleAddCategory}>追加</Button>
+            </div>
+
+            {/* Custom Category List */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold px-1">カスタムカテゴリ</label>
+              <div className="grid grid-cols-1 gap-1.5">
+                {categories.filter(c => !DEFAULT_CATEGORIES.includes(c as any)).length === 0 ? (
+                  <p className="text-xs text-zinc-600 px-1 italic">カスタムカテゴリはありません</p>
+                ) : (
+                  categories.filter(c => !DEFAULT_CATEGORIES.includes(c as any)).map(cat => (
+                    <div key={cat} className="flex items-center justify-between p-2 pl-3 bg-zinc-900 border border-zinc-800 rounded-lg group">
+                      <span className="text-sm text-zinc-300">{cat}</span>
+                      <button 
+                        onClick={() => handleDeleteCategory(cat)}
+                        className="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-zinc-800 rounded-md transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>

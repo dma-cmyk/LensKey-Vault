@@ -5,7 +5,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const DEFAULT_CATEGORIES = ['パスワード', 'ウォレット', 'メモ', 'その他'] as const;
+export const DEFAULT_CATEGORIES = ['パスワード', 'メモ', 'その他'] as const;
 
 /* ── Card ── */
 export function Card({ children, className, onClick }: {
