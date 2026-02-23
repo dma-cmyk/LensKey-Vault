@@ -27,14 +27,21 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 
 /* QR Scanner overrides */
-#reader {
+#qr-reader {
   border: none !important;
   border-radius: 16px;
   overflow: hidden;
 }
-#reader video {
+#qr-reader video {
   border-radius: 16px;
+  width: 100% !important;
 }
-#reader__scan_region {
+#qr-reader__scan_region {
   min-height: 250px;
+}
+/* Hide default html5-qrcode UI elements */
+#qr-reader__dashboard,
+#qr-reader__status_span,
+#qr-reader__header_message {
+  display: none !important;
 }
