@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db, type VaultItem } from '../lib/db';
 import { Button, Card, DEFAULT_CATEGORIES, Badge, cn, Modal, ConfirmModal } from './UIParts';
-import { Plus, QrCode, Trash2, ChevronRight, Fingerprint, Lock, Settings2, GripVertical } from 'lucide-react';
+import { Plus, QrCode, Trash2, ChevronRight, ChevronDown, Fingerprint, Lock, Settings2, GripVertical } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -65,6 +65,7 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
   const [newCategory, setNewCategory] = useState('');
   const [showManageModal, setShowManageModal] = useState(false);
   const [deleteTask, setDeleteTask] = useState<{ type: 'item' | 'category', id: string, name?: string } | null>(null);
+  const [showAllCategories, setShowAllCategories] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -161,9 +162,12 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
       </div>
 
       {/* Category Filter */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar items-center">
+      <div className="space-y-2">
+        <div className="flex items-start gap-2">
+          <div className={cn(
+            "flex-1 flex flex-wrap gap-2 transition-all duration-300 overflow-hidden",
+            !showAllCategories && "max-h-[44px]"
+          )}>
             <Badge active={filter === 'すべて'} onClick={() => setFilter('すべて')}>すべて</Badge>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={categories} strategy={horizontalListSortingStrategy}>
@@ -178,12 +182,26 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
               </SortableContext>
             </DndContext>
           </div>
-          <button 
-            onClick={() => setShowManageModal(true)}
-            className="p-2 ml-2 rounded-xl text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/50 transition-all shrink-0"
-          >
-            <Settings2 className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0 pt-1">
+            {categories.length > 3 && (
+              <button
+                onClick={() => setShowAllCategories(!showAllCategories)}
+                className={cn(
+                  "p-2 rounded-xl text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/50 transition-all",
+                  showAllCategories && "text-blue-400 bg-blue-500/10 hover:text-blue-300"
+                )}
+                title={showAllCategories ? "折りたたむ" : "すべて表示"}
+              >
+                <ChevronDown className={cn("w-4 h-4 transition-transform duration-300", showAllCategories && "rotate-180")} />
+              </button>
+            )}
+            <button 
+              onClick={() => setShowManageModal(true)}
+              className="p-2 rounded-xl text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/50 transition-all"
+            >
+              <Settings2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
