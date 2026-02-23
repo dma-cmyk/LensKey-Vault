@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db, type VaultItem } from '../lib/db';
-import { Button, Card, CATEGORIES, Badge, type Category } from './UIParts';
-import { Plus, QrCode, Trash2, ChevronRight, Fingerprint, Lock } from 'lucide-react';
+import { Button, Card, DEFAULT_CATEGORIES, Badge, cn } from './UIParts';
+import { Plus, QrCode, Trash2, ChevronRight, Fingerprint, Lock, Settings2 } from 'lucide-react';
 
 interface DashboardProps {
   onAddNew: () => void;
@@ -11,11 +11,26 @@ interface DashboardProps {
 
 export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
   const [items, setItems] = useState<VaultItem[]>([]);
-  const [filter, setFilter] = useState<Category | 'すべて'>('すべて');
+  const [categories, setCategories] = useState<string[]>([]);
+  const [filter, setFilter] = useState<string>('すべて');
+  const [newCategory, setNewCategory] = useState('');
+  const [showCatSettings, setShowCatSettings] = useState(false);
 
   useEffect(() => {
     db.vault_items.toArray().then(setItems);
+    db.categories.toArray().then(cats => {
+      const dbCats = cats.map(c => c.name);
+      setCategories([...new Set([...DEFAULT_CATEGORIES, ...dbCats])]);
+    });
   }, []);
+
+  const handleAddCategory = async () => {
+    if (!newCategory.trim() || categories.includes(newCategory.trim())) return;
+    const name = newCategory.trim();
+    await db.categories.add({ name, createdAt: new Date().toISOString() });
+    setCategories(prev => [...prev, name]);
+    setNewCategory('');
+  };
 
   const filteredItems = filter === 'すべて'
     ? items
@@ -44,11 +59,35 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
       </div>
 
       {/* Category Filter */}
-      <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
-        <Badge active={filter === 'すべて'} onClick={() => setFilter('すべて')}>すべて</Badge>
-        {CATEGORIES.map(cat => (
-          <Badge key={cat} active={filter === cat} onClick={() => setFilter(cat)}>{cat}</Badge>
-        ))}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
+            <Badge active={filter === 'すべて'} onClick={() => setFilter('すべて')}>すべて</Badge>
+            {categories.map(cat => (
+              <Badge key={cat} active={filter === cat} onClick={() => setFilter(cat)}>{cat}</Badge>
+            ))}
+          </div>
+          <button 
+            onClick={() => setShowCatSettings(!showCatSettings)}
+            className={cn("p-2 rounded-lg transition-colors", showCatSettings ? "text-blue-400 bg-blue-500/10" : "text-zinc-600 hover:text-zinc-400")}
+          >
+            <Settings2 className="w-4 h-4" />
+          </button>
+        </div>
+
+        {showCatSettings && (
+          <div className="flex gap-2 animate-in slide-in-from-top-2 duration-200">
+            <input 
+              type="text" 
+              placeholder="新しいカテゴリ名"
+              className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
+              value={newCategory}
+              onChange={e => setNewCategory(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
+            />
+            <Button size="sm" onClick={handleAddCategory}>追加</Button>
+          </div>
+        )}
       </div>
 
       {/* Items */}

@@ -9,13 +9,20 @@ export interface VaultItem {
   hasBiometrics: boolean;
 }
 
+export interface CategoryItem {
+  name: string;
+  createdAt: string;
+}
+
 export class VaultDatabase extends Dexie {
   vault_items!: Table<VaultItem>;
+  categories!: Table<CategoryItem>;
 
   constructor() {
     super('HybridSeedVault');
-    this.version(1).stores({
-      vault_items: 'id, title, category, createdAt'
+    this.version(2).stores({
+      vault_items: 'id, title, category, createdAt',
+      categories: 'name'
     });
   }
 }

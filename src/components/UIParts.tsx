@@ -5,8 +5,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const CATEGORIES = ['DeFi', 'NFT', '保管用', 'その他'] as const;
-export type Category = (typeof CATEGORIES)[number];
+export const DEFAULT_CATEGORIES = ['パスワード', 'ウォレット', 'メモ', 'その他'] as const;
 
 /* ── Card ── */
 export function Card({ children, className, onClick }: {

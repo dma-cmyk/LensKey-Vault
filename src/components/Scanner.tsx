@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { Button, Card, Input } from './UIParts';
+import { Button, Card, Input, cn } from './UIParts';
 import { decryptData } from '../lib/crypto';
 import { db } from '../lib/db';
-import { ArrowLeft, AlertCircle, CheckCircle2, Save } from 'lucide-react';
+import { ArrowLeft, AlertCircle, CheckCircle2, Save, Fingerprint } from 'lucide-react';
+import { isWebAuthnAvailable, registerBiometrics } from '../lib/auth';
 
 interface ScannerProps {
   onBack: () => void;
@@ -16,6 +17,12 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
   const [error, setError] = useState<string | null>(null);
   const [decryptedSeed, setDecryptedSeed] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isBioAvailable, setIsBioAvailable] = useState(false);
+  const [enableBio, setEnableBio] = useState(false);
+
+  useEffect(() => {
+    isWebAuthnAvailable().then(setIsBioAvailable);
+  }, []);
 
   useEffect(() => {
     const scanner = new Html5QrcodeScanner(
@@ -65,20 +72,25 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
     }
   };
 
-  const handleSaveToLocal = async () => {
+  const handleSave = async () => {
+    if (!scanResult || !decryptedSeed) return;
     setIsSaving(true);
     try {
+      if (enableBio) {
+        await registerBiometrics(password);
+      }
+
       await db.vault_items.add({
         id: crypto.randomUUID(),
-        title: scanResult.t,
+        title: scanResult.t || 'Restored Seed',
         category: scanResult.c || 'その他',
         encryptedData: scanResult.d,
         createdAt: new Date().toISOString(),
-        hasBiometrics: false
+        hasBiometrics: enableBio
       });
       onRestored();
-    } catch {
-      setError('保存に失敗しました');
+    } catch (err: any) {
+      setError(err.message || '保存に失敗しました');
     } finally {
       setIsSaving(false);
     }
@@ -148,11 +160,42 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
             このデバイスのローカルDBに保存して、次回から素早くアクセスできるようにしますか？
           </div>
 
+          {isBioAvailable && (
+            <button
+              onClick={() => setEnableBio(!enableBio)}
+              className={cn(
+                "w-full flex items-center justify-between p-4 rounded-xl border transition-all",
+                enableBio 
+                  ? "bg-blue-600/10 border-blue-500 text-blue-400" 
+                  : "bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <Fingerprint className="w-5 h-5" />
+                <span className="text-sm font-medium">生体認証を有効にする</span>
+              </div>
+              <div className={cn(
+                "w-10 h-6 rounded-full relative transition-colors",
+                enableBio ? "bg-blue-600" : "bg-zinc-800"
+              )}>
+                <div className={cn(
+                  "absolute top-1 w-4 h-4 rounded-full bg-white transition-all",
+                  enableBio ? "left-5" : "left-1"
+                )} />
+              </div>
+            </button>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <Button variant="ghost" onClick={onRestored} className="w-full">
               保存せず終了
             </Button>
-            <Button onClick={handleSaveToLocal} disabled={isSaving} className="w-full">
+            <Button
+              onClick={handleSave}
+              className="w-full"
+              size="lg"
+              disabled={isSaving}
+            >
               <Save className="w-4 h-4" />
               保存する
             </Button>

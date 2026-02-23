@@ -6,6 +6,8 @@ import { verifyBiometrics } from '../lib/auth';
 import { ArrowLeft, EyeOff, Key, Fingerprint, Copy, Check, AlertCircle, QrCode } from 'lucide-react';
 import { cn } from './UIParts';
 import QRCode from 'qrcode';
+import { isWebAuthnAvailable, registerBiometrics } from '../lib/auth';
+import { db } from '../lib/db';
 
 interface ItemViewProps {
   item: VaultItem;
@@ -20,6 +22,11 @@ export function ItemView({ item, onBack }: ItemViewProps) {
   const [isVerifying, setIsVerifying] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [qrBlobUrl, setQrBlobUrl] = useState<string | null>(null);
+  const [isBioAvailable, setIsBioAvailable] = useState(false);
+
+  useEffect(() => {
+    isWebAuthnAvailable().then(setIsBioAvailable);
+  }, []);
 
   useEffect(() => {
     if (decryptedSeed) {
@@ -77,6 +84,18 @@ export function ItemView({ item, onBack }: ItemViewProps) {
     }
   };
 
+  const handleEnableBio = async () => {
+    setError(null);
+    try {
+      await registerBiometrics(password);
+      await db.vault_items.update(item.id, { hasBiometrics: true });
+      alert('生体認証を有効化しました！次回から指紋・顔認証でアクセスできます。');
+      onBack();
+    } catch (err: any) {
+      setError(err.message || '生体認証の登録に失敗しました');
+    }
+  };
+
   const copyToClipboard = () => {
     if (decryptedSeed) {
       navigator.clipboard.writeText(decryptedSeed);
@@ -121,7 +140,7 @@ export function ItemView({ item, onBack }: ItemViewProps) {
             </form>
 
             {/* Biometrics */}
-            {item.hasBiometrics && (
+            {item.hasBiometrics ? (
               <>
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-px bg-zinc-800" />
@@ -139,6 +158,22 @@ export function ItemView({ item, onBack }: ItemViewProps) {
                   {isVerifying ? '認証中...' : '生体認証でアクセス'}
                 </Button>
               </>
+            ) : isBioAvailable && (
+              <div className="pt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-blue-400 hover:text-blue-300 gap-1.5"
+                  onClick={handleEnableBio}
+                  disabled={!password || password.length < 8}
+                >
+                  <Fingerprint className="w-4 h-4" />
+                  生体認証を有効化する
+                </Button>
+                <p className="text-[10px] text-zinc-600 text-center mt-2">
+                  ※パスワードを入力した状態で有効化してください
+                </p>
+              </div>
             )}
 
             {error && (

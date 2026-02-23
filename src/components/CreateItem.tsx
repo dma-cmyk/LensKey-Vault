@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button, Card, Input, CATEGORIES, type Category } from './UIParts';
+import { Button, Card, Input, DEFAULT_CATEGORIES } from './UIParts';
 import { encryptData } from '../lib/crypto';
 import { db } from '../lib/db';
 import { isWebAuthnAvailable, registerBiometrics } from '../lib/auth';
@@ -13,9 +13,10 @@ interface CreateItemProps {
 
 export function CreateItem({ onBack, onSuccess }: CreateItemProps) {
   const [step, setStep] = useState<'form' | 'biometrics' | 'qr'>('form');
+  const [categories, setCategories] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     title: '',
-    category: 'DeFi' as Category,
+    category: 'パスワード',
     seed: '',
     password: '',
     confirmPassword: ''
@@ -26,6 +27,10 @@ export function CreateItem({ onBack, onSuccess }: CreateItemProps) {
 
   useEffect(() => {
     isWebAuthnAvailable().then(setIsBioAvailable);
+    db.categories.toArray().then(cats => {
+      const dbCats = cats.map(c => c.name);
+      setCategories([...new Set([...DEFAULT_CATEGORIES, ...dbCats])]);
+    });
   }, []);
 
   useEffect(() => {
@@ -192,11 +197,11 @@ export function CreateItem({ onBack, onSuccess }: CreateItemProps) {
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-zinc-400">カテゴリ</label>
             <select
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-sans"
               value={formData.category}
-              onChange={e => setFormData({...formData, category: e.target.value as Category})}
+              onChange={e => setFormData({...formData, category: e.target.value})}
             >
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 
