@@ -1,7 +1,56 @@
 import { useState, useEffect } from 'react';
 import { db, type VaultItem } from '../lib/db';
 import { Button, Card, DEFAULT_CATEGORIES, Badge, cn } from './UIParts';
-import { Plus, QrCode, Trash2, ChevronRight, Fingerprint, Lock, Settings2 } from 'lucide-react';
+import { Plus, QrCode, Trash2, ChevronRight, Fingerprint, Lock, Settings2, GripVertical } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  TouchSensor,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+function SortableBadge({ id, active, onClick }: { id: string; active: boolean; onClick: () => void }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 'auto',
+    position: 'relative' as const,
+  };
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      {...attributes} 
+      {...listeners}
+      className={cn("touch-none", isDragging && "scale-105 transition-transform")}
+    >
+      <Badge active={active} onClick={onClick}>
+        {id}
+      </Badge>
+    </div>
+  );
+}
+
 
 interface DashboardProps {
   onAddNew: () => void;
@@ -16,34 +65,87 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
   const [newCategory, setNewCategory] = useState('');
   const [showCatSettings, setShowCatSettings] = useState(false);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 }
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 5 }
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   useEffect(() => {
     db.vault_items.toArray().then(setItems);
-    db.categories.toArray().then(cats => {
-      const dbCats = cats.map(c => c.name);
-      setCategories([...new Set([...DEFAULT_CATEGORIES, ...dbCats])]);
-    });
+    
+    // Initialize & Fetch Categories
+    const fetchCategories = async () => {
+      const existing = await db.categories.orderBy('order').toArray();
+      if (existing.length === 0) {
+        // First time initialization
+        const initial = DEFAULT_CATEGORIES.map((name, i) => ({
+          name,
+          order: i,
+          createdAt: new Date().toISOString()
+        }));
+        await db.categories.bulkAdd(initial);
+        setCategories(DEFAULT_CATEGORIES as any);
+      } else {
+        setCategories(existing.map(c => c.name));
+      }
+    };
+    fetchCategories();
   }, []);
 
   const handleAddCategory = async () => {
     if (!newCategory.trim() || categories.includes(newCategory.trim())) return;
     const name = newCategory.trim();
-    await db.categories.add({ name, createdAt: new Date().toISOString() });
+    const count = await db.categories.count();
+    await db.categories.add({ 
+      name, 
+      createdAt: new Date().toISOString(),
+      order: count
+    });
     setCategories(prev => [...prev, name]);
     setNewCategory('');
   };
 
   const handleDeleteCategory = async (name: string) => {
+    if (DEFAULT_CATEGORIES.includes(name as any)) {
+      alert('デフォルトカテゴリは削除できません。');
+      return;
+    }
     if (confirm(`カテゴリ「${name}」を削除しますか？\nこのカテゴリに属するアイテムは削除されませんが、カテゴリ表示が「その他」になります。`)) {
       await db.categories.delete(name);
       setCategories(prev => prev.filter(c => c !== name));
       if (filter === name) setFilter('すべて');
       
-      // Update existing items in background (optional, but good for UI consistency)
       const linkedItems = await db.vault_items.where('category').equals(name).toArray();
       for (const item of linkedItems) {
         await db.vault_items.update(item.id, { category: 'その他' });
       }
       db.vault_items.toArray().then(setItems);
+    }
+  };
+
+  const handleDragEnd = async (event: any) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = categories.indexOf(active.id);
+    const newIndex = categories.indexOf(over.id);
+
+    const newCategories = [...categories];
+    newCategories.splice(oldIndex, 1);
+    newCategories.splice(newIndex, 0, active.id);
+    
+    setCategories(newCategories);
+
+    // Persist to DB
+    for (let i = 0; i < newCategories.length; i++) {
+      await db.categories.update(newCategories[i], { order: i });
     }
   };
 
@@ -76,11 +178,27 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
       {/* Category Filter */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar items-center">
             <Badge active={filter === 'すべて'} onClick={() => setFilter('すべて')}>すべて</Badge>
-            {categories.map(cat => (
-              <Badge key={cat} active={filter === cat} onClick={() => setFilter(cat)}>{cat}</Badge>
-            ))}
+            <DndContext 
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext 
+                items={categories}
+                strategy={horizontalListSortingStrategy}
+              >
+                {categories.map(cat => (
+                  <SortableBadge 
+                    key={cat} 
+                    id={cat} 
+                    active={filter === cat} 
+                    onClick={() => setFilter(cat)} 
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
           </div>
           <button 
             onClick={() => setShowCatSettings(!showCatSettings)}
@@ -113,7 +231,10 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
                 ) : (
                   categories.filter(c => !DEFAULT_CATEGORIES.includes(c as any)).map(cat => (
                     <div key={cat} className="flex items-center justify-between p-2 pl-3 bg-zinc-900 border border-zinc-800 rounded-lg group">
-                      <span className="text-sm text-zinc-300">{cat}</span>
+                      <div className="flex items-center gap-2">
+                        <GripVertical className="w-3.5 h-3.5 text-zinc-700" />
+                        <span className="text-sm text-zinc-300">{cat}</span>
+                      </div>
                       <button 
                         onClick={() => handleDeleteCategory(cat)}
                         className="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-zinc-800 rounded-md transition-colors"

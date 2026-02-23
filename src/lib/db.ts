@@ -12,6 +12,7 @@ export interface VaultItem {
 export interface CategoryItem {
   name: string;
   createdAt: string;
+  order: number;
 }
 
 export class VaultDatabase extends Dexie {
@@ -20,9 +21,9 @@ export class VaultDatabase extends Dexie {
 
   constructor() {
     super('HybridSeedVault');
-    this.version(2).stores({
+    this.version(3).stores({
       vault_items: 'id, title, category, createdAt',
-      categories: 'name'
+      categories: 'name, order'
     });
   }
 }
