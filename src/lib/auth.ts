@@ -2,10 +2,12 @@
  * Simple WebAuthn implementation for biometric gating.
  * This implementation uses the presence of a credential as a trigger
  * to "unlock" a password stored in IndexedDB/LocalStorage.
- * For a real production app, PRF extension or server-side verification would be used.
+ * 
+ * Each vault item gets its own biometric credential keyed by item ID,
+ * with a display name for easy identification.
  */
 
-const AUTH_ITEM_ID = 'master-biometric-credential';
+const LEGACY_AUTH_ITEM_ID = 'master-biometric-credential';
 
 export async function isWebAuthnAvailable(): Promise<boolean> {
   return (
@@ -15,17 +17,18 @@ export async function isWebAuthnAvailable(): Promise<boolean> {
   );
 }
 
-export async function registerBiometrics(password: string): Promise<void> {
+export async function registerBiometrics(password: string, itemId?: string, displayName?: string): Promise<void> {
   const challenge = window.crypto.getRandomValues(new Uint8Array(32));
   const userID = window.crypto.getRandomValues(new Uint8Array(16));
+  const credName = displayName || 'Local User';
 
   const options: PublicKeyCredentialCreationOptions = {
     challenge,
-    rp: { name: 'Hybrid Seed Vault', id: window.location.hostname },
+    rp: { name: 'LensKey Vault', id: window.location.hostname },
     user: {
       id: userID,
-      name: 'user@local',
-      displayName: 'Local User'
+      name: itemId ? `vault-item-${itemId}` : 'user@local',
+      displayName: credName
     },
     pubKeyCredParams: [{ alg: -7, type: 'public-key' }], // ES256
     authenticatorSelection: {
@@ -38,16 +41,18 @@ export async function registerBiometrics(password: string): Promise<void> {
   const credential = await window.crypto.subtle && await navigator.credentials.create({ publicKey: options });
 
   if (credential) {
-    // Store the password associated with biometrics. 
-    // In this simple implementation, we store it in LocalStorage (not ideal for prod, but matches requirement).
-    // We'll prefix it to distinguish it from other items.
-    localStorage.setItem(`bio_pass_${AUTH_ITEM_ID}`, password);
+    const storageKey = itemId ? `bio_pass_${itemId}` : `bio_pass_${LEGACY_AUTH_ITEM_ID}`;
+    localStorage.setItem(storageKey, password);
+    // Store display name for the credential
+    if (itemId && displayName) {
+      localStorage.setItem(`bio_name_${itemId}`, displayName);
+    }
   } else {
     throw new Error('Biometric registration failed');
   }
 }
 
-export async function verifyBiometrics(): Promise<string> {
+export async function verifyBiometrics(itemId?: string): Promise<string> {
   const challenge = window.crypto.getRandomValues(new Uint8Array(32));
 
   const options: PublicKeyCredentialRequestOptions = {
@@ -60,7 +65,10 @@ export async function verifyBiometrics(): Promise<string> {
   const assertion = await navigator.credentials.get({ publicKey: options });
 
   if (assertion) {
-    const password = localStorage.getItem(`bio_pass_${AUTH_ITEM_ID}`);
+    // Try item-specific key first, then fall back to legacy global key
+    const storageKey = itemId ? `bio_pass_${itemId}` : `bio_pass_${LEGACY_AUTH_ITEM_ID}`;
+    const password = localStorage.getItem(storageKey)
+      || localStorage.getItem(`bio_pass_${LEGACY_AUTH_ITEM_ID}`);
     if (password) return password;
     throw new Error('No password found for this biometric credential');
   } else {
@@ -68,10 +76,23 @@ export async function verifyBiometrics(): Promise<string> {
   }
 }
 
-export function hasBiometricsRegistered(): boolean {
-  return !!localStorage.getItem(`bio_pass_${AUTH_ITEM_ID}`);
+export function getBiometricName(itemId: string): string | null {
+  return localStorage.getItem(`bio_name_${itemId}`);
 }
 
-export function clearBiometrics(): void {
-  localStorage.removeItem(`bio_pass_${AUTH_ITEM_ID}`);
+export function hasBiometricsRegistered(itemId?: string): boolean {
+  if (itemId) {
+    return !!localStorage.getItem(`bio_pass_${itemId}`)
+      || !!localStorage.getItem(`bio_pass_${LEGACY_AUTH_ITEM_ID}`);
+  }
+  return !!localStorage.getItem(`bio_pass_${LEGACY_AUTH_ITEM_ID}`);
+}
+
+export function clearBiometrics(itemId?: string): void {
+  if (itemId) {
+    localStorage.removeItem(`bio_pass_${itemId}`);
+    localStorage.removeItem(`bio_name_${itemId}`);
+  } else {
+    localStorage.removeItem(`bio_pass_${LEGACY_AUTH_ITEM_ID}`);
+  }
 }

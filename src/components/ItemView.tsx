@@ -114,7 +114,7 @@ export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
     setIsVerifying(true);
     setError(null);
     try {
-      const bioPassword = await verifyBiometrics();
+      const bioPassword = await verifyBiometrics(item.id);
       const seed = await decryptData(item.encryptedData, bioPassword);
       setDecryptedSeed(seed);
     } catch {
@@ -127,7 +127,7 @@ export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
   const handleEnableBio = async () => {
     setError(null);
     try {
-      await registerBiometrics(password);
+      await registerBiometrics(password, item.id, currentTitle);
       await db.vault_items.update(item.id, { hasBiometrics: true });
       alert('生体認証を有効化しました！次回から指紋・顔認証でアクセスできます。');
       onBack();

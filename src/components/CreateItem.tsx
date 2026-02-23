@@ -98,9 +98,9 @@ export function CreateItem({ onBack, onSuccess }: CreateItemProps) {
 
   const handleRegisterBio = async () => {
     try {
-      await registerBiometrics(formData.password);
       const latest = await db.vault_items.orderBy('createdAt').last();
       if (latest) {
+        await registerBiometrics(formData.password, latest.id, formData.title);
         await db.vault_items.update(latest.id, { hasBiometrics: true });
       }
       setStep('qr');
