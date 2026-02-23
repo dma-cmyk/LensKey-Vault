@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Button, Card, Input, CATEGORIES, type Category } from './UIParts';
+import { Button, Card, Input, CATEGORIES, SectionHeader, type Category } from './UIParts';
 import { encryptData } from '../lib/crypto';
 import { db } from '../lib/db';
 import { isWebAuthnAvailable, registerBiometrics } from '../lib/auth';
-import { ArrowLeft, Save, Printer, CheckCircle2, AlertTriangle, Fingerprint } from 'lucide-react';
+import { ArrowLeft, Save, Printer, AlertTriangle, Fingerprint, LucideShieldCheck } from 'lucide-react';
 import QRCode from 'qrcode';
 
 interface CreateItemProps {
@@ -24,17 +24,15 @@ export function CreateItem({ onBack, onSuccess }: CreateItemProps) {
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [isBioAvailable, setIsBioAvailable] = useState(false);
 
-  // Check bio availability on mount or form success
   useEffect(() => {
     isWebAuthnAvailable().then(setIsBioAvailable);
   }, []);
 
-  // Clear memory on step change or unmount
   useEffect(() => {
     if (step !== 'form') {
       const timer = setTimeout(() => {
         setFormData(prev => ({ ...prev, seed: '' }));
-      }, 5 * 60 * 1000); // Clear seed from memory after 5 mins
+      }, 5 * 60 * 1000);
       return () => {
         clearTimeout(timer);
         setFormData(prev => ({ ...prev, seed: '' }));
@@ -62,7 +60,7 @@ export function CreateItem({ onBack, onSuccess }: CreateItemProps) {
         category: formData.category,
         encryptedData: encrypted,
         createdAt,
-        hasBiometrics: false // Will update if bio is registered
+        hasBiometrics: false
       });
 
       const qrData = JSON.stringify({
@@ -73,8 +71,8 @@ export function CreateItem({ onBack, onSuccess }: CreateItemProps) {
       });
 
       const url = await QRCode.toDataURL(qrData, {
-        width: 400,
-        margin: 1,
+        width: 600,
+        margin: 2,
         color: { dark: '#000000', light: '#ffffff' }
       });
       setQrCodeUrl(url);
@@ -93,7 +91,6 @@ export function CreateItem({ onBack, onSuccess }: CreateItemProps) {
   const handleRegisterBio = async () => {
     try {
       await registerBiometrics(formData.password);
-      // Update last inserted item to indicate bio protection
       const latest = await db.vault_items.orderBy('createdAt').last();
       if (latest) {
         await db.vault_items.update(latest.id, { hasBiometrics: true });
@@ -108,33 +105,32 @@ export function CreateItem({ onBack, onSuccess }: CreateItemProps) {
 
   if (step === 'qr') {
     return (
-      <div className="max-w-xl mx-auto space-y-8 animate-in slide-in-from-right duration-500">
+      <div className="max-w-xl mx-auto space-y-12 py-6 animate-in slide-in-from-bottom duration-700">
         <div className="text-center">
-          <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
-            <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+          <div className="relative w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-500/20 shadow-[0_0_50px_-10px_rgba(16,185,129,0.3)]">
+            <LucideShieldCheck className="w-12 h-12 text-emerald-400" />
           </div>
-          <h2 className="text-3xl font-bold text-white">登録完了！</h2>
-          <p className="text-zinc-400 mt-2">物理バックアップとしてこのQRコードを保存・印刷してください。</p>
+          <SectionHeader title="登録が完了しました" subtitle="物理バックアップとしてこのQRコードを保存・印刷してください。" />
         </div>
 
-        <Card className="p-8 bg-white flex justify-center">
-          {qrCodeUrl && <img src={qrCodeUrl} alt="Vault QR Code" className="w-full max-w-[300px]" />}
+        <Card className="p-10 bg-white flex justify-center shadow-2xl scale-100 ring-1 ring-white/10 ring-offset-8 ring-offset-black">
+          {qrCodeUrl && <img src={qrCodeUrl} alt="Vault QR Code" className="w-full max-w-[320px] mix-blend-multiply" />}
         </Card>
 
-        <div className="bg-amber-900/20 border border-amber-900/30 p-4 rounded-xl flex gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
-          <p className="text-sm text-amber-200/80">
-            <strong>重要:</strong> パスワードを忘れると、このQRコードがあっても復元できません。パスワードも安全な場所に保管してください。
+        <div className="glass-panel border-amber-500/20 bg-amber-500/5 p-6 rounded-3xl flex gap-4">
+          <AlertTriangle className="w-6 h-6 text-amber-500 shrink-0" />
+          <p className="text-sm text-amber-200/60 leading-relaxed font-medium">
+            <strong className="text-amber-400">重要:</strong> このQRコードは暗号化されています。復号には設定したパスワードが必要です。パスワードを忘れると復元できません。
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <Button variant="secondary" onClick={() => window.print()}>
-            <Printer className="w-4 h-4" />
-            印刷する
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Button variant="glass" size="lg" onClick={() => window.print()}>
+            <Printer className="w-5 h-5" />
+            印刷する (PDF保存)
           </Button>
-          <Button onClick={onSuccess}>
-            ダッシュボードへ
+          <Button size="lg" onClick={onSuccess}>
+            ダッシュボードへ戻る
           </Button>
         </div>
       </div>
@@ -143,22 +139,22 @@ export function CreateItem({ onBack, onSuccess }: CreateItemProps) {
 
   if (step === 'biometrics') {
     return (
-      <div className="max-w-md mx-auto space-y-8 py-12 text-center animate-in slide-in-from-right duration-500">
-        <div className="w-20 h-20 bg-blue-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-blue-500/20">
-          <Fingerprint className="w-10 h-10 text-blue-400" />
+      <div className="max-w-lg mx-auto space-y-12 py-20 text-center animate-in zoom-in-95 duration-700">
+        <div className="relative w-32 h-32 mx-auto mb-8">
+          <div className="absolute inset-0 bg-blue-500/20 blur-[50px] rounded-full animate-float" />
+          <div className="relative w-full h-full glass-panel flex items-center justify-center rounded-[2.5rem] border-blue-500/30">
+            <Fingerprint className="w-16 h-16 text-blue-400" />
+          </div>
         </div>
         <div>
-          <h2 className="text-2xl font-bold text-white">生体認証の登録</h2>
-          <p className="text-zinc-400 mt-2">
-            次回からパスワード入力なしでシードフレーズを確認できるようになります。
-          </p>
+          <SectionHeader title="生体認証の有効化" subtitle="次回からパスワードの代わりに指紋や顔認証でシードフレーズを閲覧できるようになります。" />
         </div>
-        <div className="flex flex-col gap-3">
-          <Button onClick={handleRegisterBio} className="w-full py-4 text-lg">
-            生体認証を有効にする
+        <div className="flex flex-col gap-4 max-w-sm mx-auto">
+          <Button onClick={handleRegisterBio} size="lg" className="w-full h-16 text-lg">
+            生体認証を登録する
           </Button>
           <Button variant="ghost" onClick={() => setStep('qr')} className="w-full">
-            今はスキップする
+            今はスキップ
           </Button>
         </div>
       </div>
@@ -166,76 +162,90 @@ export function CreateItem({ onBack, onSuccess }: CreateItemProps) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8 animate-in slide-in-from-left duration-500">
-      <div className="flex items-center gap-4">
-        <button onClick={onBack} className="p-2 hover:bg-zinc-800 rounded-full transition-colors">
+    <div className="max-w-3xl mx-auto space-y-12 animate-in slide-in-from-left duration-500">
+      <div className="flex items-center gap-6">
+        <button onClick={onBack} className="w-12 h-12 glass-panel flex items-center justify-center rounded-2xl hover:bg-white/10 transition-colors">
           <ArrowLeft className="w-6 h-6 text-zinc-400" />
         </button>
-        <h2 className="text-2xl font-bold text-white">新規シードフレーズ登録</h2>
+        <SectionHeader title="新規シード登録" subtitle="新しいシードフレーズをローカルに暗号化して保存します" />
       </div>
 
-      <form onSubmit={handleFormSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input 
-            label="タイトル・用途" 
-            placeholder="例: メインウォレット" 
-            required
-            value={formData.title}
-            onChange={e => setFormData({...formData, title: e.target.value})}
-          />
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-zinc-400">カテゴリ</label>
-            <select 
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 focus:outline-none focus:border-blue-500 transition-all"
-              value={formData.category}
-              onChange={e => setFormData({...formData, category: e.target.value as Category})}
-            >
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+      <Card className="p-10 border border-white/[0.05] bg-white/[0.02]">
+        <form onSubmit={handleFormSubmit} className="space-y-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <Input 
+              label="タイトル・名称" 
+              placeholder="例: メインウォレット" 
+              required
+              value={formData.title}
+              onChange={e => setFormData({...formData, title: e.target.value})}
+            />
+            <div className="space-y-2.5">
+              <label className="text-sm font-semibold text-zinc-400 ml-1 font-display">カテゴリ</label>
+              <select 
+                className="w-full bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl px-5 py-3.5 text-zinc-100 focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all duration-300 appearance-none font-medium"
+                value={formData.category}
+                onChange={e => setFormData({...formData, category: e.target.value as Category})}
+              >
+                {CATEGORIES.map(c => <option key={c} value={c} className="bg-zinc-900">{c}</option>)}
+              </select>
+            </div>
           </div>
-        </div>
 
-        <Input 
-          label="シードフレーズ" 
-          type="textarea"
-          placeholder="12個または24個の単語を入力..." 
-          required
-          rows={4}
-          value={formData.seed}
-          onChange={e => setFormData({...formData, seed: e.target.value})}
-        />
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input 
-            label="暗号化用パスワード" 
-            type="password"
-            placeholder="強力なパスワードを入力" 
+            label="12または24単語のシードフレーズ" 
+            type="textarea"
+            placeholder="word1 word2 word3..." 
             required
-            value={formData.password}
-            onChange={e => setFormData({...formData, password: e.target.value})}
+            rows={5}
+            className="font-mono text-center tracking-wide leading-loose"
+            value={formData.seed}
+            onChange={e => setFormData({...formData, seed: e.target.value})}
           />
-          <Input 
-            label="パスワード（確認）" 
-            type="password"
-            placeholder="もう一度入力" 
-            required
-            value={formData.confirmPassword}
-            onChange={e => setFormData({...formData, confirmPassword: e.target.value})}
-          />
-        </div>
 
-        {error && (
-          <div className="p-4 bg-red-900/20 border border-red-900/30 rounded-xl flex gap-3 text-red-200 text-sm">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            {error}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <Input 
+              label="暗号化パスワード" 
+              type="password"
+              placeholder="強固なパスワード" 
+              required
+              value={formData.password}
+              onChange={e => setFormData({...formData, password: e.target.value})}
+            />
+            <Input 
+              label="パスワードの確認" 
+              type="password"
+              placeholder="再入力" 
+              required
+              value={formData.confirmPassword}
+              onChange={e => setFormData({...formData, confirmPassword: e.target.value})}
+            />
           </div>
-        )}
 
-        <Button type="submit" className="w-full py-4 text-lg">
-          <Save className="w-5 h-5" />
-          暗号化して保存
-        </Button>
-      </form>
+          {error && (
+            <div className="p-5 glass-panel border-red-500/20 bg-red-500/5 rounded-2xl flex gap-4 text-red-200 text-sm font-medium animate-in shake duration-300">
+              <AlertTriangle className="w-5 h-5 shrink-0 text-red-400" />
+              {error}
+            </div>
+          )}
+
+          <Button type="submit" size="lg" className="w-full h-16 text-lg">
+            <Save className="w-5 h-5 mr-1" />
+            暗号化してローカルに保存
+          </Button>
+        </form>
+      </Card>
+      
+      <div className="flex justify-center items-center gap-8 text-zinc-600">
+        <div className="flex items-center gap-2">
+          <LucideShieldCheck className="w-4 h-4" />
+          <span className="text-[10px] font-bold uppercase tracking-widest">AES-256-GCM Proteced</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Fingerprint className="w-4 h-4" />
+          <span className="text-[10px] font-bold uppercase tracking-widest">Biometric Optional</span>
+        </div>
+      </div>
     </div>
   );
 }

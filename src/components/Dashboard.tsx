@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db, type VaultItem } from '../lib/db';
-import { Button, Card, CATEGORIES, Badge, type Category } from './UIParts';
-import { Plus, Scan, Wallet, Shield, ExternalLink, Trash2, Clock } from 'lucide-react';
+import { Button, Card, CATEGORIES, Badge, SectionHeader, type Category } from './UIParts';
+import { Plus, Scan, Wallet, Shield, ExternalLink, Trash2, Clock, ChevronRight } from 'lucide-react';
 
 interface DashboardProps {
   onAddNew: () => void;
@@ -34,91 +34,104 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Vault Dashboard</h1>
-          <p className="text-zinc-400 mt-1">セキュアに管理されたあなたのシードフレーズ</p>
-        </div>
-        <div className="flex gap-3">
-          <Button variant="secondary" onClick={onScan}>
-            <Scan className="w-4 h-4" />
-            QRスキャン復元
+    <div className="space-y-12 animate-in fade-in duration-700">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-8">
+        <SectionHeader 
+          title="Vault Dashboard" 
+          subtitle="セキュアに管理されたあなたのシードフレーズ"
+        />
+        <div className="flex gap-4">
+          <Button variant="glass" onClick={onScan} className="flex-1 sm:flex-none">
+            <Scan className="w-4 h-4 text-zinc-400" />
+            QRから復元
           </Button>
-          <Button onClick={onAddNew}>
+          <Button onClick={onAddNew} className="flex-1 sm:flex-none">
             <Plus className="w-4 h-4" />
             新規追加
           </Button>
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-        <button 
-          onClick={() => setFilter('すべて')}
-          className="shrink-0"
-        >
+      <div className="flex items-center gap-3 overflow-x-auto pb-4 scrollbar-none">
+        <button onClick={() => setFilter('すべて')} className="shrink-0 transition-transform active:scale-95">
           <Badge active={filter === 'すべて'}>すべて</Badge>
         </button>
         {CATEGORIES.map(cat => (
-          <button 
-            key={cat} 
-            onClick={() => setFilter(cat)}
-            className="shrink-0"
-          >
+          <button key={cat} onClick={() => setFilter(cat)} className="shrink-0 transition-transform active:scale-95">
             <Badge active={filter === cat}>{cat}</Badge>
           </button>
         ))}
       </div>
 
       {filteredItems.length === 0 ? (
-        <Card className="p-12 text-center border-dashed bg-transparent">
-          <div className="w-16 h-16 bg-zinc-900 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-zinc-800">
-            <Shield className="w-8 h-8 text-zinc-600" />
+        <div className="py-20 text-center animate-in zoom-in-95 duration-500">
+          <div className="relative w-24 h-24 mx-auto mb-8">
+            <div className="absolute inset-0 bg-white/5 blur-3xl rounded-full" />
+            <div className="relative w-full h-full glass-panel flex items-center justify-center rounded-[2rem]">
+              <Shield className="w-10 h-10 text-zinc-700" />
+            </div>
           </div>
-          <h3 className="text-xl font-medium text-zinc-300">アイテムが見つかりません</h3>
-          <p className="text-zinc-500 mt-2 mb-6">新しいシードフレーズを登録するか、QRコードから読み込んでください。</p>
-          <Button onClick={onAddNew} className="mx-auto">
+          <h3 className="text-2xl font-black text-white mb-3 font-display">アイテムがまだありません</h3>
+          <p className="text-zinc-500 text-lg max-w-md mx-auto mb-10">
+            登録されたシードフレーズがありません。<br />新しく追加するか、バックアップQRをスキャンしてください。
+          </p>
+          <Button onClick={onAddNew} size="lg" className="mx-auto px-10">
             最初のアイテムを追加
           </Button>
-        </Card>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredItems.map(item => (
             <Card 
               key={item.id} 
-              className="group cursor-pointer hover:border-blue-500/50 transition-all hover:bg-zinc-900/50"
+              className="group cursor-pointer border border-white/[0.05]"
             >
-              <div className="p-5 flex flex-col h-full" onClick={() => onSelectItem(item)}>
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center border border-blue-500/20">
-                    <Wallet className="w-5 h-5 text-blue-400" />
+              <div className="p-8 flex flex-col h-full" onClick={() => onSelectItem(item)}>
+                <div className="flex items-start justify-between mb-8">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-blue-500/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative w-14 h-14 glass-panel flex items-center justify-center rounded-2xl group-hover:border-blue-500/50 transition-colors">
+                      <Wallet className="w-7 h-7 text-white/40 group-hover:text-blue-400 transition-colors" />
+                    </div>
                   </div>
                   <Badge>{item.category}</Badge>
                 </div>
                 
-                <h3 className="text-lg font-semibold text-zinc-100 mb-1 group-hover:text-blue-400 transition-colors">
+                <h3 className="text-xl font-bold text-white mb-2 font-display group-hover:text-blue-400 transition-colors flex items-center justify-between">
                   {item.title}
+                  <ChevronRight className="w-5 h-5 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-blue-500" />
                 </h3>
                 
-                <div className="flex items-center gap-2 text-zinc-500 text-xs mb-6">
+                <div className="flex items-center gap-2 text-zinc-600 text-[10px] font-black uppercase tracking-widest mb-8">
                   <Clock className="w-3 h-3" />
                   {new Date(item.createdAt).toLocaleDateString()}
                 </div>
 
-                <div className="mt-auto pt-4 border-t border-zinc-800 flex items-center justify-between">
-                  {item.hasBiometrics && (
-                    <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded">
-                      Bio Protected
-                    </span>
+                <div className="mt-auto pt-6 border-t border-white/[0.05] flex items-center justify-between">
+                  {item.hasBiometrics ? (
+                    <div className="flex items-center gap-2 bg-emerald-500/5 px-2.5 py-1 rounded-lg border border-emerald-500/10">
+                      <div className="w-1 h-1 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                      <span className="text-[10px] uppercase tracking-widest font-black text-emerald-400/80">
+                        Biometric Secured
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 bg-zinc-500/5 px-2.5 py-1 rounded-lg border border-zinc-500/10">
+                      <div className="w-1 h-1 rounded-full bg-zinc-700" />
+                      <span className="text-[10px] uppercase tracking-widest font-black text-zinc-600">
+                        Password Only
+                      </span>
+                    </div>
                   )}
-                  <div className="flex gap-2 ml-auto">
+                  <div className="flex gap-1">
                     <button 
                       onClick={(e) => deleteItem(e, item.id)}
-                      className="p-2 text-zinc-600 hover:text-red-500 transition-colors"
+                      className="p-2.5 text-zinc-600 hover:text-red-500 hover:bg-red-500/5 rounded-xl transition-all"
+                      title="削除"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
-                    <button className="p-2 text-zinc-600 group-hover:text-blue-400 transition-colors">
+                    <button className="p-2.5 text-zinc-600 group-hover:text-blue-400 group-hover:bg-blue-400/5 rounded-xl transition-all">
                       <ExternalLink className="w-4 h-4" />
                     </button>
                   </div>
