@@ -27,7 +27,7 @@ export async function registerBiometrics(password: string, itemId?: string, disp
     rp: { name: 'LensKey Vault', id: window.location.hostname },
     user: {
       id: userID,
-      name: itemId ? `vault-item-${itemId}` : 'user@local',
+      name: credName,
       displayName: credName
     },
     pubKeyCredParams: [{ alg: -7, type: 'public-key' }], // ES256
