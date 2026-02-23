@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { db, type VaultItem } from '../lib/db';
 import { Button, Card, DEFAULT_CATEGORIES, Badge, cn, Modal, ConfirmModal } from './UIParts';
-import { Plus, QrCode, Trash2, ChevronRight, ChevronDown, Fingerprint, Lock, Settings2, GripVertical } from 'lucide-react';
+import { Plus, QrCode, Trash2, ChevronRight, ChevronDown, Fingerprint, Lock, Settings2, GripVertical, Tag } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -66,6 +67,20 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
   const [showManageModal, setShowManageModal] = useState(false);
   const [deleteTask, setDeleteTask] = useState<{ type: 'item' | 'category', id: string, name?: string } | null>(null);
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [changeCategoryItemId, setChangeCategoryItemId] = useState<string | null>(null);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const categoryPopoverRef = useRef<HTMLDivElement>(null);
+
+  const openCategoryPopover = useCallback((itemId: string, badgeEl: HTMLElement) => {
+    if (changeCategoryItemId === itemId) {
+      setChangeCategoryItemId(null);
+      setPopoverPos(null);
+      return;
+    }
+    const rect = badgeEl.getBoundingClientRect();
+    setPopoverPos({ top: rect.bottom + 4, left: rect.left });
+    setChangeCategoryItemId(itemId);
+  }, [changeCategoryItemId]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -91,6 +106,26 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
     };
     fetchCategories();
   }, []);
+
+  // Close category popover on outside click
+  useEffect(() => {
+    if (!changeCategoryItemId) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (categoryPopoverRef.current && !categoryPopoverRef.current.contains(e.target as Node)) {
+        setChangeCategoryItemId(null);
+        setPopoverPos(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [changeCategoryItemId]);
+
+  const handleItemCategoryChange = async (itemId: string, newCategory: string) => {
+    await db.vault_items.update(itemId, { category: newCategory });
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, category: newCategory } : i));
+    setChangeCategoryItemId(null);
+    setPopoverPos(null);
+  };
 
   const handleAddCategory = async () => {
     if (!newCategory.trim() || categories.includes(newCategory.trim())) return;
@@ -228,9 +263,22 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <h3 className="font-semibold text-zinc-100 truncate">{item.title}</h3>
-                    <span className="text-[10px] bg-zinc-800 text-zinc-500 px-2.5 py-1 rounded-full font-bold uppercase tracking-tight shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openCategoryPopover(item.id, e.currentTarget);
+                      }}
+                      className={cn(
+                        "flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-tight transition-all shrink-0",
+                        changeCategoryItemId === item.id
+                          ? "bg-blue-600/20 text-blue-400 border border-blue-500/40"
+                          : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300"
+                      )}
+                      title="カテゴリを変更"
+                    >
+                      <Tag className="w-2.5 h-2.5" />
                       {item.category}
-                    </span>
+                    </button>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-zinc-600 font-medium">
                     <span>{new Date(item.createdAt).toLocaleDateString()}</span>
@@ -321,6 +369,38 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
           </div>
         </div>
       </Modal>
+
+      {/* Category Change Popover (Portal) */}
+      {changeCategoryItemId && popoverPos && createPortal(
+        <div
+          ref={categoryPopoverRef}
+          className="fixed z-[9999] bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl shadow-black/40 py-1 min-w-[140px] animate-in fade-in slide-in-from-top-2 duration-150"
+          style={{ top: popoverPos.top, left: popoverPos.left }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {categories.map(cat => {
+            const targetItem = items.find(i => i.id === changeCategoryItemId);
+            return (
+              <button
+                key={cat}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleItemCategoryChange(changeCategoryItemId, cat);
+                }}
+                className={cn(
+                  "w-full text-left px-4 py-2.5 text-sm transition-colors",
+                  cat === targetItem?.category
+                    ? "text-blue-400 bg-blue-500/10 font-semibold"
+                    : "text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                )}
+              >
+                {cat}
+              </button>
+            );
+          })}
+        </div>,
+        document.body
+      )}
 
       {/* Delete Confirmation Modal */}
       <ConfirmModal 
