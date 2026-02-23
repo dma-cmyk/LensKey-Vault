@@ -61,14 +61,14 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
     }
   }, []);
 
-  const stopAndClear = useCallback(async () => {
+  const stopScanner = useCallback(async () => {
     if (scannerRef.current) {
       try {
         if (scannerRef.current.isScanning) {
           await scannerRef.current.stop();
         }
-        scannerRef.current.clear();
       } catch { /* ignore */ }
+      scannerRef.current = null;
     }
     setIsCameraActive(false);
   }, []);
@@ -78,10 +78,14 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
     setError(null);
 
     try {
-      // Always recreate instance to avoid stale DOM references
-      await stopAndClear();
-      // Small delay to ensure DOM is ready after mode switch
-      await new Promise(r => setTimeout(r, 100));
+      // Stop any existing scanner first
+      await stopScanner();
+
+      // Small delay to ensure DOM is settled
+      await new Promise(r => setTimeout(r, 50));
+
+      const el = document.getElementById('qr-reader');
+      if (el) el.innerHTML = '';
 
       const qr = new Html5Qrcode('qr-reader');
       scannerRef.current = qr;
@@ -99,7 +103,7 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
     } finally {
       setIsCameraStarting(false);
     }
-  }, [handleScanSuccess, stopAndClear]);
+  }, [handleScanSuccess, stopScanner]);
 
   // Initialize: fetch cameras and start
   useEffect(() => {
@@ -125,7 +129,6 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
         if (scannerRef.current.isScanning) {
           scannerRef.current.stop().catch(() => {});
         }
-        try { scannerRef.current.clear(); } catch { /* ignore */ }
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,7 +140,7 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
     setError(null);
 
     if (mode === 'file') {
-      await stopAndClear();
+      await stopScanner();
       setScanMode(mode);
     } else if (mode === 'camera' && cameras.length > 0) {
       setScanMode(mode);
