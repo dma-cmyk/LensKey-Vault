@@ -82,12 +82,13 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
       await stopScanner();
 
       // Small delay to ensure DOM is settled
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise(r => setTimeout(r, 100));
 
-      const el = document.getElementById('qr-reader');
+      // Clean up the dedicated scanner region (not React-managed)
+      const el = document.getElementById('qr-reader-region');
       if (el) el.innerHTML = '';
 
-      const qr = new Html5Qrcode('qr-reader');
+      const qr = new Html5Qrcode('qr-reader-region');
       scannerRef.current = qr;
 
       await qr.start(
@@ -162,11 +163,16 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
   // Handle file selection
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !scannerRef.current) return;
+    if (!file) return;
     setError(null);
 
     try {
-      const result = await scannerRef.current.scanFile(file, false);
+      // Create a temporary scanner instance for file scanning
+      const el = document.getElementById('qr-reader-region');
+      if (el) el.innerHTML = '';
+      const fileScanner = new Html5Qrcode('qr-reader-region');
+      const result = await fileScanner.scanFile(file, false);
+      fileScanner.clear();
       handleScanSuccess(result);
     } catch {
       setError('QRコードを検出できませんでした。画像を確認してください。');
@@ -257,50 +263,44 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
             </button>
           </div>
 
-          {/* Camera View */}
-          {scanMode === 'camera' ? (
-            <Card>
-              <div className="relative overflow-hidden rounded-xl">
-                <div
-                  id="qr-reader"
-                  className={cn(
-                    "w-full min-h-[300px] bg-black",
-                    !isCameraActive && "flex items-center justify-center"
-                  )}
-                >
-                  {isCameraStarting && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10">
-                      <Loader2 className="w-8 h-8 text-blue-400 animate-spin mb-3" />
-                      <p className="text-sm text-zinc-400">カメラ起動中...</p>
-                    </div>
-                  )}
+          {/* Camera View — qr-reader-region is always in DOM */}
+          <Card className={scanMode === 'camera' ? '' : 'hidden'}>
+            <div className="relative overflow-hidden rounded-xl">
+              {/* html5-qrcode renders into this div — React never touches its children */}
+              <div
+                id="qr-reader-region"
+                className="w-full min-h-[300px] bg-black"
+              />
+
+              {/* Loading overlay */}
+              {isCameraStarting && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10">
+                  <Loader2 className="w-8 h-8 text-blue-400 animate-spin mb-3" />
+                  <p className="text-sm text-zinc-400">カメラ起動中...</p>
                 </div>
-
-                {/* Camera controls overlay */}
-                {cameras.length > 1 && isCameraActive && (
-                  <div className="absolute bottom-3 right-3 z-20">
-                    <button
-                      onClick={handleSwitchCamera}
-                      className="p-3 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-black/80 transition-all active:scale-90 border border-white/10"
-                      title={cameras[(activeCameraIdx + 1) % cameras.length]?.label}
-                    >
-                      <SwitchCamera className="w-5 h-5" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Camera info */}
-              {cameras.length > 0 && (
-                <p className="text-center text-[11px] text-zinc-600 py-2 px-4 truncate">
-                  {cameras[activeCameraIdx]?.label}
-                </p>
               )}
-            </Card>
-          ) : (
-            /* Keep qr-reader in DOM but hidden when in file mode */
-            <div id="qr-reader" className="hidden" />
-          )}
+
+              {/* Camera controls overlay */}
+              {cameras.length > 1 && isCameraActive && (
+                <div className="absolute bottom-3 right-3 z-20">
+                  <button
+                    onClick={handleSwitchCamera}
+                    className="p-3 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-black/80 transition-all active:scale-90 border border-white/10"
+                    title={cameras[(activeCameraIdx + 1) % cameras.length]?.label}
+                  >
+                    <SwitchCamera className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Camera info */}
+            {cameras.length > 0 && (
+              <p className="text-center text-[11px] text-zinc-600 py-2 px-4 truncate">
+                {cameras[activeCameraIdx]?.label}
+              </p>
+            )}
+          </Card>
 
           {/* File Upload */}
           {scanMode === 'file' && (

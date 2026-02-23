@@ -27,21 +27,21 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 
 /* QR Scanner overrides */
-#qr-reader {
+#qr-reader-region {
   border: none !important;
   border-radius: 16px;
   overflow: hidden;
 }
-#qr-reader video {
+#qr-reader-region video {
   border-radius: 16px;
   width: 100% !important;
 }
-#qr-reader__scan_region {
+#qr-reader-region__scan_region {
   min-height: 250px;
 }
 /* Hide default html5-qrcode UI elements */
-#qr-reader__dashboard,
-#qr-reader__status_span,
-#qr-reader__header_message {
+#qr-reader-region__dashboard,
+#qr-reader-region__status_span,
+#qr-reader-region__header_message {
   display: none !important;
 }
