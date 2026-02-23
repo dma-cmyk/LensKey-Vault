@@ -5,6 +5,8 @@
 ![LensKey Vault](https://img.shields.io/badge/Security-Offline--Only-blue?style=for-the-badge&logo=shield)
 ![Tech](https://img.shields.io/badge/Stack-React%20%7C%20Vite%20%7C%20Tailwind-61DAFB?style=for-the-badge)
 
+🔗 **Live Demo**: [https://dma-cmyk.github.io/LensKey-Vault/](https://dma-cmyk.github.io/LensKey-Vault/)
+
 ## 🌟 主な機能
 
 - **🛡️ 強固な暗号化**: Web Crypto API (AES-256-GCM) を使用し、マスターパスワードでデータを守ります。
