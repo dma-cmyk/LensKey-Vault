@@ -11,13 +11,13 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'favicon.png'],
       manifest: {
-        name: 'Hybrid Seed Vault',
-        short_name: 'SeedVault',
-        description: 'Secure Offline Seed Phrase Manager',
-        theme_color: '#000000',
-        background_color: '#000000',
+        name: 'LensKey Vault',
+        short_name: 'LensKey',
+        description: 'Secure Offline Secret & Password Manager',
+        theme_color: '#09090b',
+        background_color: '#09090b',
         display: 'standalone',
         icons: [
           {
