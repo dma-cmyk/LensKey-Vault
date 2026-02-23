@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { type VaultItem } from '../lib/db';
 import { Button, Card, Input, DEFAULT_CATEGORIES } from './UIParts';
-import { decryptData } from '../lib/crypto';
+import { decryptData, encryptData } from '../lib/crypto';
 import { verifyBiometrics } from '../lib/auth';
-import { ArrowLeft, EyeOff, Key, Fingerprint, Copy, Check, AlertCircle, QrCode, Pencil } from 'lucide-react';
+import { ArrowLeft, EyeOff, Key, Fingerprint, Copy, Check, AlertCircle, QrCode, Pencil, Lock as LockIcon } from 'lucide-react';
 import { cn } from './UIParts';
 import QRCode from 'qrcode';
 import { isWebAuthnAvailable, registerBiometrics } from '../lib/auth';
@@ -32,6 +32,12 @@ export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
   const [currentCategory, setCurrentCategory] = useState(item.category);
   const [categories, setCategories] = useState<string[]>([]);
   const titleInputRef = useRef<HTMLInputElement>(null);
+
+  // Password change state
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [changePasswordError, setChangePasswordError] = useState<string | null>(null);
 
   useEffect(() => {
     isWebAuthnAvailable().then(setIsBioAvailable);
@@ -141,6 +147,39 @@ export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
       navigator.clipboard.writeText(decryptedSeed);
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setChangePasswordError(null);
+
+    if (newPassword.length < 8) {
+      setChangePasswordError('パスワードは8文字以上にしてください');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setChangePasswordError('パスワードが一致しません');
+      return;
+    }
+
+    try {
+      const encrypted = await encryptData(decryptedSeed!, newPassword);
+      await db.vault_items.update(item.id, { encryptedData: encrypted });
+      
+      if (item.hasBiometrics) {
+        // Re-register biometrics with the new password
+        await registerBiometrics(newPassword, item.id, currentTitle);
+      }
+      
+      setShowChangePasswordModal(false);
+      setNewPassword('');
+      setConfirmNewPassword('');
+      alert('パスワードを更新しました。セキュリティのためロックします。');
+      setDecryptedSeed(null);
+      setPassword('');
+    } catch (err: any) {
+      setChangePasswordError(err.message || 'パスワードの更新に失敗しました');
     }
   };
 
@@ -304,6 +343,13 @@ export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
                     )}
                   </button>
                   <button
+                    onClick={() => setShowChangePasswordModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-medium transition-colors text-zinc-300"
+                  >
+                    <LockIcon className="w-3.5 h-3.5" />
+                    パスワード変更
+                  </button>
+                  <button
                     onClick={() => setDecryptedSeed(null)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-red-900/50 rounded-lg text-xs font-medium transition-colors text-zinc-400 hover:text-red-400"
                   >
@@ -336,6 +382,64 @@ export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
           <Button variant="ghost" onClick={onBack} className="w-full">
             ← ダッシュボードに戻る
           </Button>
+
+          {/* Change Password Modal */}
+          <Modal
+            isOpen={showChangePasswordModal}
+            onClose={() => {
+              setShowChangePasswordModal(false);
+              setNewPassword('');
+              setConfirmNewPassword('');
+              setChangePasswordError(null);
+            }}
+            title="パスワード変更"
+          >
+            <form onSubmit={handleChangePassword} className="p-5 space-y-5">
+              <p className="text-xs text-zinc-500 leading-relaxed">
+                このアイテムの暗号化に使用するパスワードを変更します。<br />
+                新しいパスワードでデータを再暗号化し、必要に応じて生体認証情報も更新します。
+              </p>
+              
+              <Input
+                label="新しいパスワード"
+                type="password"
+                placeholder="8文字以上"
+                required
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+              />
+
+              <Input
+                label="パスワード確認"
+                type="password"
+                placeholder="もう一度入力"
+                required
+                value={confirmNewPassword}
+                onChange={e => setConfirmNewPassword(e.target.value)}
+              />
+
+              {changePasswordError && (
+                <div className="bg-red-900/20 border border-red-800/50 rounded-xl p-3 flex gap-3 text-red-400 text-sm">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  {changePasswordError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  className="flex-1" 
+                  onClick={() => setShowChangePasswordModal(false)}
+                >
+                  キャンセル
+                </Button>
+                <Button type="submit" className="flex-1">
+                  更新する
+                </Button>
+              </div>
+            </form>
+          </Modal>
         </div>
       )}
     </div>
