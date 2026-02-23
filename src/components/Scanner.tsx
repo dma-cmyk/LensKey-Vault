@@ -61,18 +61,32 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
     }
   }, []);
 
+  const stopAndClear = useCallback(async () => {
+    if (scannerRef.current) {
+      try {
+        if (scannerRef.current.isScanning) {
+          await scannerRef.current.stop();
+        }
+        scannerRef.current.clear();
+      } catch { /* ignore */ }
+    }
+    setIsCameraActive(false);
+  }, []);
+
   const startCamera = useCallback(async (cameraId: string) => {
-    if (!scannerRef.current) return;
     setIsCameraStarting(true);
     setError(null);
 
     try {
-      // Stop existing scan if running
-      if (scannerRef.current.isScanning) {
-        await scannerRef.current.stop();
-      }
+      // Always recreate instance to avoid stale DOM references
+      await stopAndClear();
+      // Small delay to ensure DOM is ready after mode switch
+      await new Promise(r => setTimeout(r, 100));
 
-      await scannerRef.current.start(
+      const qr = new Html5Qrcode('qr-reader');
+      scannerRef.current = qr;
+
+      await qr.start(
         cameraId,
         { fps: 15, qrbox: { width: 250, height: 250 } },
         handleScanSuccess,
@@ -85,18 +99,14 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
     } finally {
       setIsCameraStarting(false);
     }
-  }, [handleScanSuccess]);
+  }, [handleScanSuccess, stopAndClear]);
 
-  // Initialize scanner & fetch cameras
+  // Initialize: fetch cameras and start
   useEffect(() => {
-    const qr = new Html5Qrcode('qr-reader');
-    scannerRef.current = qr;
-
     Html5Qrcode.getCameras().then(devices => {
       if (devices.length > 0) {
         const cams = devices.map(d => ({ id: d.id, label: d.label || 'カメラ' }));
         setCameras(cams);
-        // Prefer back camera
         const backIdx = cams.findIndex(c =>
           c.label.toLowerCase().includes('back') ||
           c.label.toLowerCase().includes('rear') ||
@@ -107,15 +117,16 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
         startCamera(cams[idx].id);
       }
     }).catch(() => {
-      // Camera not available, fall back to file mode
       setScanMode('file');
     });
 
     return () => {
-      if (qr.isScanning) {
-        qr.stop().catch(() => {});
+      if (scannerRef.current) {
+        if (scannerRef.current.isScanning) {
+          scannerRef.current.stop().catch(() => {});
+        }
+        try { scannerRef.current.clear(); } catch { /* ignore */ }
       }
-      qr.clear();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -123,17 +134,17 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
   // Handle mode change
   const handleModeChange = async (mode: ScanMode) => {
     if (mode === scanMode) return;
-    setScanMode(mode);
     setError(null);
 
     if (mode === 'file') {
-      // Stop camera
-      if (scannerRef.current?.isScanning) {
-        await scannerRef.current.stop().catch(() => {});
-        setIsCameraActive(false);
-      }
+      await stopAndClear();
+      setScanMode(mode);
     } else if (mode === 'camera' && cameras.length > 0) {
-      startCamera(cameras[activeCameraIdx].id);
+      setScanMode(mode);
+      // Delay slightly so the qr-reader div is visible before starting
+      setTimeout(() => {
+        startCamera(cameras[activeCameraIdx].id);
+      }, 150);
     }
   };
 
@@ -244,7 +255,7 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
           </div>
 
           {/* Camera View */}
-          {scanMode === 'camera' && (
+          {scanMode === 'camera' ? (
             <Card>
               <div className="relative overflow-hidden rounded-xl">
                 <div
@@ -283,6 +294,9 @@ export function Scanner({ onBack, onRestored }: ScannerProps) {
                 </p>
               )}
             </Card>
+          ) : (
+            /* Keep qr-reader in DOM but hidden when in file mode */
+            <div id="qr-reader" className="hidden" />
           )}
 
           {/* File Upload */}
