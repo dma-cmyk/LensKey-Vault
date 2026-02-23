@@ -9,6 +9,24 @@
 
 const LEGACY_AUTH_ITEM_ID = 'master-biometric-credential';
 
+function bufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function base64ToBuffer(base64: string): ArrayBuffer {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
 export async function isWebAuthnAvailable(): Promise<boolean> {
   return (
     window.PublicKeyCredential !== undefined &&
@@ -33,19 +51,28 @@ export async function registerBiometrics(password: string, itemId?: string, disp
     pubKeyCredParams: [{ alg: -7, type: 'public-key' }], // ES256
     authenticatorSelection: {
       authenticatorAttachment: 'platform',
-      userVerification: 'required'
+      userVerification: 'required',
+      residentKey: 'required',
+      requireResidentKey: true
     },
     timeout: 60000
   };
 
-  const credential = await window.crypto.subtle && await navigator.credentials.create({ publicKey: options });
+  const credential = await navigator.credentials.create({ publicKey: options }) as PublicKeyCredential | null;
 
   if (credential) {
     const storageKey = itemId ? `bio_pass_${itemId}` : `bio_pass_${LEGACY_AUTH_ITEM_ID}`;
     localStorage.setItem(storageKey, password);
-    // Store display name for the credential
-    if (itemId && displayName) {
-      localStorage.setItem(`bio_name_${itemId}`, displayName);
+    
+    // Store credential ID for allowCredentials filtering
+    const credIdB64 = bufferToBase64(credential.rawId);
+    if (itemId) {
+      localStorage.setItem(`bio_cred_${itemId}`, credIdB64);
+      if (displayName) {
+        localStorage.setItem(`bio_name_${itemId}`, displayName);
+      }
+    } else {
+      localStorage.setItem(`bio_cred_${LEGACY_AUTH_ITEM_ID}`, credIdB64);
     }
   } else {
     throw new Error('Biometric registration failed');
@@ -55,11 +82,36 @@ export async function registerBiometrics(password: string, itemId?: string, disp
 export async function verifyBiometrics(itemId?: string): Promise<string> {
   const challenge = window.crypto.getRandomValues(new Uint8Array(32));
 
+  // Build allowCredentials to show only the relevant passkey in the picker
+  const allowCredentials: PublicKeyCredentialDescriptor[] = [];
+  const credKey = itemId ? `bio_cred_${itemId}` : `bio_cred_${LEGACY_AUTH_ITEM_ID}`;
+  const credIdB64 = localStorage.getItem(credKey);
+  
+  if (credIdB64) {
+    allowCredentials.push({
+      type: 'public-key',
+      id: base64ToBuffer(credIdB64),
+      transports: ['internal']
+    });
+  }
+  // Also try legacy credential if it exists
+  if (itemId) {
+    const legacyCred = localStorage.getItem(`bio_cred_${LEGACY_AUTH_ITEM_ID}`);
+    if (legacyCred && legacyCred !== credIdB64) {
+      allowCredentials.push({
+        type: 'public-key',
+        id: base64ToBuffer(legacyCred),
+        transports: ['internal']
+      });
+    }
+  }
+
   const options: PublicKeyCredentialRequestOptions = {
     challenge,
     rpId: window.location.hostname,
     userVerification: 'required',
-    timeout: 60000
+    timeout: 60000,
+    ...(allowCredentials.length > 0 ? { allowCredentials } : {})
   };
 
   const assertion = await navigator.credentials.get({ publicKey: options });
@@ -92,7 +144,10 @@ export function clearBiometrics(itemId?: string): void {
   if (itemId) {
     localStorage.removeItem(`bio_pass_${itemId}`);
     localStorage.removeItem(`bio_name_${itemId}`);
+    localStorage.removeItem(`bio_cred_${itemId}`);
   } else {
     localStorage.removeItem(`bio_pass_${LEGACY_AUTH_ITEM_ID}`);
+    localStorage.removeItem(`bio_cred_${LEGACY_AUTH_ITEM_ID}`);
   }
 }
+
