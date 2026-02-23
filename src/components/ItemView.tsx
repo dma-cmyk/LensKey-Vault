@@ -3,7 +3,9 @@ import { type VaultItem } from '../lib/db';
 import { Button, Card, Input } from './UIParts';
 import { decryptData } from '../lib/crypto';
 import { verifyBiometrics } from '../lib/auth';
-import { ArrowLeft, EyeOff, Key, Fingerprint, Copy, Check, AlertCircle } from 'lucide-react';
+import { ArrowLeft, EyeOff, Key, Fingerprint, Copy, Check, AlertCircle, QrCode } from 'lucide-react';
+import { cn } from './UIParts';
+import QRCode from 'qrcode';
 
 interface ItemViewProps {
   item: VaultItem;
@@ -16,16 +18,39 @@ export function ItemView({ item, onBack }: ItemViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+  const [qrBlobUrl, setQrBlobUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (decryptedSeed) {
-      const timer = setTimeout(() => setDecryptedSeed(null), 2 * 60 * 1000);
+      const timer = setTimeout(() => {
+        setDecryptedSeed(null);
+        setShowQr(false);
+      }, 2 * 60 * 1000);
       return () => {
         clearTimeout(timer);
         setDecryptedSeed(null);
+        setShowQr(false);
       };
     }
   }, [decryptedSeed]);
+
+  useEffect(() => {
+    if (showQr && !qrBlobUrl) {
+      const qrData = JSON.stringify({
+        v: 1,
+        t: item.title,
+        c: item.category,
+        d: item.encryptedData
+      });
+
+      QRCode.toDataURL(qrData, {
+        width: 400,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' }
+      }).then(setQrBlobUrl);
+    }
+  }, [showQr, item, qrBlobUrl]);
 
   const handleManualDecrypt = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,11 +154,21 @@ export function ItemView({ item, onBack }: ItemViewProps) {
           <Card>
             <div className="p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-zinc-400">シードフレーズ</label>
-                <div className="flex gap-2">
+                <label className="text-sm font-medium text-zinc-400">プロパティ</label>
+                <div className="flex flex-wrap gap-2 justify-end">
+                  <button
+                    onClick={() => setShowQr(!showQr)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                      showQr ? "bg-blue-600 text-white" : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+                    )}
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    {showQr ? 'QRを閉じる' : 'QRを表示'}
+                  </button>
                   <button
                     onClick={copyToClipboard}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-medium transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-medium transition-colors text-zinc-300"
                   >
                     {isCopied ? (
                       <><Check className="w-3.5 h-3.5 text-emerald-400" /> コピー済</>
@@ -150,9 +185,20 @@ export function ItemView({ item, onBack }: ItemViewProps) {
                   </button>
                 </div>
               </div>
-              <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5 font-mono text-center text-lg break-all leading-loose select-all">
-                {decryptedSeed}
-              </div>
+
+              {showQr ? (
+                <div className="p-4 bg-white rounded-xl flex justify-center animate-in zoom-in-95 duration-200">
+                  {qrBlobUrl ? (
+                    <img src={qrBlobUrl} alt="Vault Item QR" className="w-full max-w-[240px]" />
+                  ) : (
+                    <div className="w-[240px] h-[240px] bg-zinc-100 animate-pulse rounded-lg" />
+                  )}
+                </div>
+              ) : (
+                <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5 font-mono text-center text-lg break-all leading-loose select-all animate-in fade-in duration-300">
+                  {decryptedSeed}
+                </div>
+              )}
             </div>
           </Card>
 
