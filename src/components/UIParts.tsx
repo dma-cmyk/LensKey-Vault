@@ -8,46 +8,54 @@ export function cn(...inputs: ClassValue[]) {
 export const CATEGORIES = ['DeFi', 'NFT', '保管用', 'その他'] as const;
 export type Category = (typeof CATEGORIES)[number];
 
-export function Card({ children, className, hover = true }: { children: React.ReactNode; className?: string; hover?: boolean }) {
+/* ── Card ── */
+export function Card({ children, className, onClick }: {
+  children: React.ReactNode;
+  className?: string;
+  onClick?: () => void;
+}) {
   return (
-    <div className={cn(
-      "glass-panel rounded-[2rem] overflow-hidden transition-all duration-500",
-      hover && "hover:border-white/20 hover:bg-white/[0.08] hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)]",
-      className
-    )}>
+    <div
+      onClick={onClick}
+      className={cn(
+        "bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden transition-colors duration-200",
+        onClick && "cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/80",
+        className
+      )}
+    >
       {children}
     </div>
   );
 }
 
-export function Button({ 
-  children, 
-  variant = 'primary', 
+/* ── Button ── */
+export function Button({
+  children,
+  variant = 'primary',
   size = 'md',
-  className, 
-  ...props 
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { 
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'glass';
+  className,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
 }) {
   const variants = {
-    primary: "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20 active:shadow-none border border-blue-400/20",
-    secondary: "bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700/50",
-    danger: "bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/20",
-    ghost: "bg-transparent hover:bg-white/5 text-zinc-400 hover:text-white",
-    glass: "glass-panel hover:bg-white/10 text-white border-white/5"
+    primary: "bg-blue-600 hover:bg-blue-500 text-white",
+    secondary: "bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700",
+    danger: "bg-red-600/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-800",
+    ghost: "bg-transparent hover:bg-zinc-800 text-zinc-400 hover:text-white",
   };
 
   const sizes = {
-    sm: "px-4 py-1.5 text-xs",
-    md: "px-6 py-2.5 text-sm",
-    lg: "px-8 py-3.5 text-base"
+    sm: "px-4 py-2 text-xs",
+    md: "px-5 py-2.5 text-sm",
+    lg: "px-6 py-3 text-base",
   };
 
   return (
-    <button 
+    <button
       className={cn(
-        "rounded-2xl font-display font-semibold transition-all duration-300 active:scale-95 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2", 
+        "rounded-xl font-semibold transition-all duration-200 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2",
         variants[variant],
         sizes[size],
         className
@@ -59,48 +67,46 @@ export function Button({
   );
 }
 
-export function Input({ label, error, ...props }: React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement> & { 
-  label?: string; 
+/* ── Input ── */
+export function Input({ label, error, ...props }: React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement> & {
+  label?: string;
   error?: string;
   rows?: number;
 }) {
   const Component = props.type === 'textarea' ? 'textarea' : 'input';
   return (
-    <div className="space-y-2.5">
-      {label && <label className="text-sm font-semibold text-zinc-400 ml-1 font-display">{label}</label>}
-      <Component 
+    <div className="space-y-1.5">
+      {label && <label className="block text-sm font-medium text-zinc-400">{label}</label>}
+      <Component
         {...(props as any)}
         className={cn(
-          "w-full bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl px-5 py-3.5 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all duration-300",
-          error && "border-red-500/50 focus:border-red-500 focus:ring-red-500/10",
+          "w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all",
+          error && "border-red-500 focus:border-red-500 focus:ring-red-500/20",
           props.className
         )}
       />
-      {error && <p className="text-xs text-red-400 font-medium ml-1">{error}</p>}
+      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
     </div>
   );
 }
 
-export function Badge({ children, active }: { children: React.ReactNode; active?: boolean }) {
+/* ── Badge ── */
+export function Badge({ children, active, onClick }: {
+  children: React.ReactNode;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <span className={cn(
-      "px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold tracking-wider uppercase transition-all duration-300",
-      active 
-        ? "bg-blue-600 text-white shadow-[0_0_15px_-3px_rgba(37,99,235,0.6)]" 
-        : "bg-white/5 text-zinc-500 border border-white/5"
-    )}>
+    <button
+      onClick={onClick}
+      className={cn(
+        "px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 whitespace-nowrap",
+        active
+          ? "bg-blue-600 text-white"
+          : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+      )}
+    >
       {children}
-    </span>
-  );
-}
-
-export function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
-  return (
-    <div className="mb-10">
-      <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-none mb-3 font-display">
-        {title}
-      </h2>
-      {subtitle && <p className="text-zinc-400 font-medium">{subtitle}</p>}
-    </div>
+    </button>
   );
 }

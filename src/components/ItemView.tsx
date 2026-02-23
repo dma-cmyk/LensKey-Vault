@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { type VaultItem } from '../lib/db';
-import { Button, Card, Input, SectionHeader } from './UIParts';
+import { Button, Card, Input } from './UIParts';
 import { decryptData } from '../lib/crypto';
 import { verifyBiometrics } from '../lib/auth';
-import { ArrowLeft, EyeOff, Key, Fingerprint, Copy, Check, ShieldCheck, AlertCircle, LockKeyhole } from 'lucide-react';
+import { ArrowLeft, EyeOff, Key, Fingerprint, Copy, Check, AlertCircle } from 'lucide-react';
 
 interface ItemViewProps {
   item: VaultItem;
@@ -34,7 +34,7 @@ export function ItemView({ item, onBack }: ItemViewProps) {
       const seed = await decryptData(item.encryptedData, password);
       setDecryptedSeed(seed);
     } catch (err: any) {
-      setError(err.message || '復号に失敗しました。正しいパスワードを入力してください。');
+      setError(err.message || '復号に失敗しました');
     }
   };
 
@@ -45,9 +45,8 @@ export function ItemView({ item, onBack }: ItemViewProps) {
       const bioPassword = await verifyBiometrics();
       const seed = await decryptData(item.encryptedData, bioPassword);
       setDecryptedSeed(seed);
-    } catch (err: any) {
-      setError('生体認証による復号に失敗しました。パスワードを入力してください。');
-      console.error(err);
+    } catch {
+      setError('生体認証に失敗しました。パスワードを入力してください。');
     } finally {
       setIsVerifying(false);
     }
@@ -62,117 +61,107 @@ export function ItemView({ item, onBack }: ItemViewProps) {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-12 animate-in slide-in-from-bottom duration-700">
-      <div className="flex items-center gap-6">
-        <button onClick={onBack} className="w-12 h-12 glass-panel flex items-center justify-center rounded-2xl hover:bg-white/10 transition-colors">
-          <ArrowLeft className="w-6 h-6 text-zinc-400" />
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <button onClick={onBack} className="p-2 hover:bg-zinc-800 rounded-xl transition-colors">
+          <ArrowLeft className="w-5 h-5 text-zinc-400" />
         </button>
-        <SectionHeader title={item.title} subtitle={`登録日: ${new Date(item.createdAt).toLocaleString()}`} />
+        <div>
+          <h2 className="text-lg font-bold" style={{ fontFamily: 'var(--font-display)' }}>{item.title}</h2>
+          <p className="text-xs text-zinc-500">{new Date(item.createdAt).toLocaleString()}</p>
+        </div>
       </div>
 
       {!decryptedSeed ? (
-        <Card className="p-12 space-y-12 animate-in zoom-in-95 duration-500 overflow-visible" hover={false}>
-          <div className="text-center space-y-6">
-            <div className="relative w-24 h-24 mx-auto">
-              <div className="absolute inset-0 bg-blue-500/20 blur-[40px] rounded-full" />
-              <div className="relative w-full h-full glass-panel flex items-center justify-center rounded-[2rem] border-blue-500/20">
-                <LockKeyhole className="w-10 h-10 text-blue-400" />
-              </div>
-            </div>
-            <div>
-              <h3 className="text-2xl font-black text-white font-display uppercase tracking-tight">Security Verification</h3>
-              <p className="text-zinc-500 font-medium mt-1">
-                保存されたデータを閲覧するには、認証が必要です
-              </p>
-            </div>
-          </div>
+        <Card>
+          <div className="p-5 space-y-5">
+            <p className="text-sm text-zinc-400 text-center py-2">
+              シードフレーズを閲覧するには認証が必要です
+            </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            <form onSubmit={handleManualDecrypt} className="space-y-6">
-              <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1 font-display">Password Access</label>
-              <Input 
+            {/* Password */}
+            <form onSubmit={handleManualDecrypt} className="space-y-4">
+              <Input
+                label="パスワード"
                 type="password"
-                placeholder="Master Password"
+                placeholder="マスターパスワードを入力"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
               />
-              <Button type="submit" size="lg" className="w-full h-14">
+              <Button type="submit" size="lg" className="w-full">
                 <Key className="w-4 h-4" />
                 復号する
               </Button>
             </form>
 
-            <div className="flex flex-col gap-6">
-              <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1 font-display flex items-center gap-2">
-                Biometric Login
-                {item.hasBiometrics && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
-              </label>
-              <Button 
-                variant="glass" 
-                size="lg"
-                className="h-14 w-full border-white/5 bg-white/[0.03] disabled:opacity-20" 
-                onClick={handleBioDecrypt}
-                disabled={!item.hasBiometrics || isVerifying}
-              >
-                <Fingerprint className="w-5 h-5 text-blue-400" />
-                {isVerifying ? '認証中...' : item.hasBiometrics ? '指紋・顔認証を使用' : '生体認証未登録'}
-              </Button>
-              <p className="text-[10px] text-zinc-600 font-medium leading-relaxed mt-auto md:mb-1">
-                ※ 生体認証を登録している場合、パスワードなしで即座に復号可能です。
-              </p>
-            </div>
-          </div>
+            {/* Biometrics */}
+            {item.hasBiometrics && (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-zinc-800" />
+                  <span className="text-xs text-zinc-600">または</span>
+                  <div className="flex-1 h-px bg-zinc-800" />
+                </div>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="w-full"
+                  onClick={handleBioDecrypt}
+                  disabled={isVerifying}
+                >
+                  <Fingerprint className="w-4 h-4" />
+                  {isVerifying ? '認証中...' : '生体認証でアクセス'}
+                </Button>
+              </>
+            )}
 
-          {error && (
-            <div className="p-5 glass-panel border-red-500/20 bg-red-500/5 rounded-2xl flex gap-4 text-red-300 text-sm font-medium animate-in shake duration-300">
-              <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
-              {error}
-            </div>
-          )}
+            {error && (
+              <div className="bg-red-900/20 border border-red-800/50 rounded-xl p-3 flex gap-3 text-red-400 text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                {error}
+              </div>
+            )}
+          </div>
         </Card>
       ) : (
-        <div className="space-y-10">
-          <Card className="p-10 space-y-10 border-blue-500/30 bg-blue-500/[0.02] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.6)] animate-in zoom-in-95 duration-500" hover={false}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 glass-panel border-blue-500/30 flex items-center justify-center rounded-xl">
-                  <ShieldCheck className="w-6 h-6 text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white font-display">Decrypted Successfully</h3>
-                  <p className="text-[10px] text-emerald-400 font-black uppercase tracking-[0.2em]">Verified Secure Access</p>
+        <div className="space-y-4">
+          <Card>
+            <div className="p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-zinc-400">シードフレーズ</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={copyToClipboard}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-medium transition-colors"
+                  >
+                    {isCopied ? (
+                      <><Check className="w-3.5 h-3.5 text-emerald-400" /> コピー済</>
+                    ) : (
+                      <><Copy className="w-3.5 h-3.5" /> コピー</>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setDecryptedSeed(null)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-red-900/50 rounded-lg text-xs font-medium transition-colors text-zinc-400 hover:text-red-400"
+                  >
+                    <EyeOff className="w-3.5 h-3.5" />
+                    ロック
+                  </button>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setDecryptedSeed(null)} className="text-zinc-500 hover:text-red-400">
-                <EyeOff className="w-4 h-4" />
-                閲覧を終了
-              </Button>
-            </div>
-
-            <div className="relative group">
-              <div className="p-10 bg-black/60 glass-panel border-white/5 rounded-[2.5rem] text-2xl font-mono text-center tracking-wider break-words leading-loose text-zinc-100 shadow-inner select-all selection:bg-blue-500/40">
+              <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5 font-mono text-center text-lg break-all leading-loose select-all">
                 {decryptedSeed}
               </div>
-              <button 
-                onClick={copyToClipboard}
-                className="absolute top-4 right-4 w-14 h-14 glass-panel border-white/10 flex items-center justify-center rounded-2xl text-zinc-400 hover:text-white hover:border-blue-500/50 transition-all hover:scale-110 active:scale-90 shadow-2xl"
-                title="クリップボードにコピー"
-              >
-                {isCopied ? <Check className="w-6 h-6 text-emerald-400 animate-in zoom-in duration-300" /> : <Copy className="w-6 h-6" />}
-              </button>
-            </div>
-
-            <div className="p-6 glass-panel border-amber-500/10 bg-amber-500/[0.02] rounded-3xl flex gap-4 items-center">
-              <AlertCircle className="w-5 h-5 shrink-0 text-amber-500/60" />
-              <p className="text-xs text-amber-200/40 font-medium leading-relaxed">
-                セキュリティのため、2分後に自動的に再ロックされます。閲覧後は速やかに「閲覧を終了」を押してください。
-              </p>
             </div>
           </Card>
 
-          <Button variant="glass" size="lg" onClick={onBack} className="w-full h-16 text-zinc-500">
-            ダッシュボードへ戻る
+          <div className="bg-amber-900/20 border border-amber-800/50 rounded-xl p-3 text-xs text-amber-400/80 text-center">
+            ⏱ セキュリティのため2分後に自動ロックされます
+          </div>
+
+          <Button variant="ghost" onClick={onBack} className="w-full">
+            ← ダッシュボードに戻る
           </Button>
         </div>
       )}
