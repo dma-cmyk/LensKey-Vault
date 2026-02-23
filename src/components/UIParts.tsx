@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { X, AlertTriangle } from 'lucide-react';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -107,5 +108,93 @@ export function Badge({ children, active, onClick }: {
     >
       {children}
     </button>
+  );
+}
+
+/* ── Modal ── */
+export function Modal({ isOpen, onClose, title, children, className }: {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+      <div 
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" 
+        onClick={onClose} 
+      />
+      <div className={cn(
+        "relative w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-200 overflow-hidden",
+        className
+      )}>
+        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
+          <h2 className="text-lg font-bold text-zinc-100 tracking-tight">{title}</h2>
+          <button 
+            onClick={onClose} 
+            className="p-2 -mr-2 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 rounded-full transition-all"
+          >
+             <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="overflow-y-auto max-h-[80vh]">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── ConfirmModal ── */
+export function ConfirmModal({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title, 
+  description, 
+  confirmText = '削除する',
+  cancelText = 'キャンセル',
+  variant = 'danger'
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  description: string;
+  confirmText?: string;
+  cancelText?: string;
+  variant?: 'danger' | 'warning' | 'primary';
+}) {
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+      <div className="space-y-6 p-1">
+        <div className="flex gap-4">
+          <div className={cn(
+            "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
+            variant === 'danger' ? "bg-red-500/10 text-red-500" : "bg-yellow-500/10 text-yellow-500"
+          )}>
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <p className="text-sm text-zinc-400 leading-relaxed py-1">
+            {description}
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <Button variant="ghost" className="flex-1" onClick={onClose}>{cancelText}</Button>
+          <Button 
+            variant={variant === 'danger' ? 'danger' : 'primary'} 
+            className="flex-1" 
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+          >
+            {confirmText}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
