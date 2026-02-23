@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/LensKey-Vault/sw.js', { scope: '/LensKey-Vault/' })})}
