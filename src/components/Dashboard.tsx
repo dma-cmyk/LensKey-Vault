@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { db, type VaultItem } from '../lib/db';
+import { db, type VaultItem, exportData, importData } from '../lib/db';
 import { Button, Card, DEFAULT_CATEGORIES, Badge, cn, Modal, ConfirmModal } from './UIParts';
-import { Plus, QrCode, Trash2, ChevronRight, ChevronDown, Fingerprint, Lock, Settings2, GripVertical, Tag } from 'lucide-react';
+import { Plus, QrCode, Trash2, ChevronRight, ChevronDown, Fingerprint, Lock, Settings2, GripVertical, Tag, Download, Upload } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -69,6 +69,10 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [changeCategoryItemId, setChangeCategoryItemId] = useState<string | null>(null);
   const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFilename, setExportFilename] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const categoryPopoverRef = useRef<HTMLDivElement>(null);
 
   const openCategoryPopover = useCallback((itemId: string, badgeEl: HTMLElement) => {
@@ -160,6 +164,49 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
     setDeleteTask(null);
   };
 
+  const handleExport = async () => {
+    const data = await exportData();
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const timestamp = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    const filename = (exportFilename.trim() || `lenskey-vault-backup-${timestamp}`) + '.json';
+    
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setShowExportModal(false);
+    setExportFilename('');
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const json = event.target?.result as string;
+        const result = await importData(json);
+        alert(`${result.count}件のアイテムをインポートしました。`);
+        // Refresh items
+        db.vault_items.toArray().then(setItems);
+        // Refresh categories
+        const existing = await db.categories.orderBy('order').toArray();
+        setCategories(existing.map(c => c.name));
+        setImportError(null);
+      } catch (err) {
+        setImportError('インポートに失敗しました。ファイル形式を確認してください。');
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleDragEnd = async (event: any) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -194,6 +241,24 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
           <QrCode className="w-4 h-4" />
           QRから復元
         </Button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Button onClick={() => setShowExportModal(true)} variant="outline" size="sm" className="w-full py-3 h-auto">
+          <Download className="w-3.5 h-3.5" />
+          バックアップ
+        </Button>
+        <Button onClick={() => fileInputRef.current?.click()} variant="outline" size="sm" className="w-full py-3 h-auto">
+          <Upload className="w-3.5 h-3.5" />
+          データを読み込む
+        </Button>
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          className="hidden" 
+          accept=".json"
+          onChange={handleImport}
+        />
       </div>
 
       {/* Category Filter */}
@@ -400,6 +465,47 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
           })}
         </div>,
         document.body
+      )}
+
+      {/* Export Filename Modal */}
+      <Modal 
+        isOpen={showExportModal} 
+        onClose={() => setShowExportModal(false)} 
+        title="バックアップの保存"
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-[11px] uppercase tracking-[0.1em] text-zinc-500 font-black px-1">
+              ファイル名
+            </label>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder={`lenskey-vault-backup-${new Date().toISOString().split('T')[0].replace(/-/g, '')}`}
+                className="flex-1 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 text-sm text-zinc-100 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all font-mono"
+                value={exportFilename}
+                onChange={e => setExportFilename(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleExport()}
+              />
+              <span className="flex items-center text-zinc-600 font-mono text-sm pr-2">.json</span>
+            </div>
+          </div>
+          <p className="text-[10px] text-zinc-600 px-1 leading-relaxed">
+            保存されたデータは、この端末または他の端末の「データを読み込む」ボタンからいつでも復元できます。
+          </p>
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setShowExportModal(false)}>キャンセル</Button>
+            <Button className="flex-1" onClick={handleExport}>保存する</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Import Error Message */}
+      {importError && (
+        <div className="fixed bottom-24 left-4 right-4 bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-3 rounded-2xl text-xs font-medium animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {importError}
+          <button onClick={() => setImportError(null)} className="ml-2 font-bold underline">閉じる</button>
+        </div>
       )}
 
       {/* Delete Confirmation Modal */}
