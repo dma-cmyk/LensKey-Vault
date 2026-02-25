@@ -17,14 +17,14 @@ function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
 
-  // Auto-lock after 5 minutes of inactivity
+  // Auto-lock after 2 minutes of inactivity
   useInactivity(() => {
     if (!isLocked) {
       setIsLocked(true);
       setSelectedItem(null);
       setCurrentView('dashboard');
     }
-  }, 5 * 60 * 1000);
+  }, 2 * 60 * 1000);
 
   const navigateTo = (view: View, item: VaultItem | null = null) => {
     if (isLocked) return;
