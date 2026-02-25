@@ -31,26 +31,31 @@ async function getDerivedKey(password: string, salt: Uint8Array): Promise<Crypto
   const encoder = new TextEncoder();
   const passwordBuffer = encoder.encode(password);
   
-  const baseKey = await window.crypto.subtle.importKey(
-    'raw',
-    passwordBuffer,
-    'PBKDF2',
-    false,
-    ['deriveKey']
-  );
-  
-  return window.crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt: salt as any,
-      iterations: ITERATIONS,
-      hash: 'SHA-256'
-    },
-    baseKey,
-    { name: ALGO, length: KEY_LEN },
-    false,
-    ['encrypt', 'decrypt']
-  );
+  try {
+    const baseKey = await window.crypto.subtle.importKey(
+      'raw',
+      passwordBuffer,
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    );
+    
+    return await window.crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: salt as any,
+        iterations: ITERATIONS,
+        hash: 'SHA-256'
+      },
+      baseKey,
+      { name: ALGO, length: KEY_LEN },
+      false,
+      ['encrypt', 'decrypt']
+    );
+  } finally {
+    // Clear the password buffer from memory
+    new Uint8Array(passwordBuffer.buffer).fill(0);
+  }
 }
 
 export async function encryptData(text: string, password: string): Promise<string> {
@@ -61,19 +66,24 @@ export async function encryptData(text: string, password: string): Promise<strin
   
   const key = await getDerivedKey(password, salt);
   
-  const encryptedContent = await window.crypto.subtle.encrypt(
-    { name: ALGO, iv },
-    key,
-    data
-  );
-  
-  const payload: EncryptedPayload = {
-    ciphertext: arrayBufferToBase64(encryptedContent),
-    iv: arrayBufferToBase64(iv.buffer as ArrayBuffer),
-    salt: arrayBufferToBase64(salt.buffer as ArrayBuffer)
-  };
-  
-  return JSON.stringify(payload);
+  try {
+    const encryptedContent = await window.crypto.subtle.encrypt(
+      { name: ALGO, iv },
+      key,
+      data
+    );
+    
+    const payload: EncryptedPayload = {
+      ciphertext: arrayBufferToBase64(encryptedContent),
+      iv: arrayBufferToBase64(iv.buffer as ArrayBuffer),
+      salt: arrayBufferToBase64(salt.buffer as ArrayBuffer)
+    };
+    
+    return JSON.stringify(payload);
+  } finally {
+    // Clear sensitive data from memory
+    new Uint8Array(data.buffer).fill(0);
+  }
 }
 
 export async function decryptData(encryptedJson: string, password: string): Promise<string> {
@@ -91,8 +101,17 @@ export async function decryptData(encryptedJson: string, password: string): Prom
       ciphertext
     );
     
-    return new TextDecoder().decode(decryptedContent);
+    const decodedText = new TextDecoder().decode(decryptedContent);
+    
+    // Clear decrypted content buffer after decoding
+    new Uint8Array(decryptedContent).fill(0);
+    
+    return decodedText;
   } catch (error) {
     throw new Error('Decryption failed. Incorrect password?');
+  } finally {
+    // Clear iv and salt buffers
+    iv.fill(0);
+    salt.fill(0);
   }
 }

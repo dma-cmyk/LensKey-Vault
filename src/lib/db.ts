@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import { encryptData, decryptData } from './crypto';
 
 export interface VaultItem {
   id: string;
@@ -36,7 +37,7 @@ export interface BackupData {
   exportedAt: string;
 }
 
-export const exportData = async (): Promise<string> => {
+export const exportData = async (password?: string): Promise<string> => {
   const items = await db.vault_items.toArray();
   const categories = await db.categories.toArray();
   const backup: BackupData = {
@@ -44,11 +45,34 @@ export const exportData = async (): Promise<string> => {
     categories: categories,
     exportedAt: new Date().toISOString()
   };
-  return JSON.stringify(backup, null, 2);
+  
+  const json = JSON.stringify(backup, null, 2);
+  
+  if (password) {
+    const encrypted = await encryptData(json, password);
+    return JSON.stringify({
+      version: 2,
+      encrypted: true,
+      data: encrypted
+    });
+  }
+  
+  return json;
 };
 
-export const importData = async (jsonString: string): Promise<{ count: number }> => {
-  const data: BackupData = JSON.parse(jsonString);
+export const importData = async (jsonString: string, password?: string): Promise<{ count: number }> => {
+  let data: BackupData;
+  const parsed = JSON.parse(jsonString);
+
+  if (parsed.encrypted && parsed.data) {
+    if (!password) {
+      throw new Error('PASSWORD_REQUIRED');
+    }
+    const decrypted = await decryptData(parsed.data, password);
+    data = JSON.parse(decrypted);
+  } else {
+    data = parsed;
+  }
   
   if (!data.vault_items || !data.categories) {
     throw new Error('Invalid backup file format');

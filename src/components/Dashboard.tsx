@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { db, type VaultItem, exportData, importData } from '../lib/db';
-import { Button, Card, DEFAULT_CATEGORIES, Badge, cn, Modal, ConfirmModal } from './UIParts';
+import { Button, Card, DEFAULT_CATEGORIES, Badge, cn, Modal, ConfirmModal, Input } from './UIParts';
 import { Plus, QrCode, Trash2, ChevronRight, ChevronDown, Fingerprint, Lock, Settings2, GripVertical, Tag, Download, Upload } from 'lucide-react';
 import {
   DndContext,
@@ -72,6 +72,11 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFilename, setExportFilename] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
+  const [encryptBackup, setEncryptBackup] = useState(true);
+  const [backupPassword, setBackupPassword] = useState('');
+  const [showImportPasswordModal, setShowImportPasswordModal] = useState(false);
+  const [pendingImportJson, setPendingImportJson] = useState<string | null>(null);
+  const [importPassword, setImportPassword] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const categoryPopoverRef = useRef<HTMLDivElement>(null);
 
@@ -165,21 +170,56 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
   };
 
   const handleExport = async () => {
-    const data = await exportData();
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const timestamp = new Date().toISOString().split('T')[0].replace(/-/g, '');
-    const filename = (exportFilename.trim() || `lenskey-vault-backup-${timestamp}`) + '.json';
-    
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    setShowExportModal(false);
-    setExportFilename('');
+    try {
+      if (encryptBackup && !backupPassword) {
+        alert('暗号化パスワードを入力してください。');
+        return;
+      }
+      const data = await exportData(encryptBackup ? backupPassword : undefined);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const timestamp = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      const filename = (exportFilename.trim() || `lenskey-vault-backup-${timestamp}`) + '.json';
+      
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setShowExportModal(false);
+      setExportFilename('');
+      setBackupPassword('');
+    } catch (err: any) {
+      alert('エクスポートに失敗しました: ' + err.message);
+    }
+  };
+
+  const processImport = async (json: string, password?: string) => {
+    try {
+      const result = await importData(json, password);
+      alert(`${result.count}件のアイテムをインポートしました。`);
+      // Refresh items
+      db.vault_items.toArray().then(setItems);
+      // Refresh categories
+      const existing = await db.categories.orderBy('order').toArray();
+      setCategories(existing.map(c => c.name));
+      setImportError(null);
+      setShowImportPasswordModal(false);
+      setImportPassword('');
+      setPendingImportJson(null);
+    } catch (err: any) {
+      if (err.message === 'PASSWORD_REQUIRED' || err.message.includes('Decryption failed')) {
+        if (err.message.includes('Decryption failed')) {
+          setImportError('パスワードが正しくありません。');
+        }
+        setPendingImportJson(json);
+        setShowImportPasswordModal(true);
+      } else {
+        setImportError('インポートに失敗しました。ファイル形式を確認してください。');
+      }
+    }
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -188,19 +228,8 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
 
     const reader = new FileReader();
     reader.onload = async (event) => {
-      try {
-        const json = event.target?.result as string;
-        const result = await importData(json);
-        alert(`${result.count}件のアイテムをインポートしました。`);
-        // Refresh items
-        db.vault_items.toArray().then(setItems);
-        // Refresh categories
-        const existing = await db.categories.orderBy('order').toArray();
-        setCategories(existing.map(c => c.name));
-        setImportError(null);
-      } catch (err) {
-        setImportError('インポートに失敗しました。ファイル形式を確認してください。');
-      }
+      const json = event.target?.result as string;
+      await processImport(json);
     };
     reader.readAsText(file);
     // Reset input
@@ -473,7 +502,7 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
         onClose={() => setShowExportModal(false)} 
         title="バックアップの保存"
       >
-        <div className="space-y-4">
+        <div className="space-y-4 p-1">
           <div className="space-y-2">
             <label className="text-[11px] uppercase tracking-[0.1em] text-zinc-500 font-black px-1">
               ファイル名
@@ -490,12 +519,65 @@ export function Dashboard({ onAddNew, onScan, onSelectItem }: DashboardProps) {
               <span className="flex items-center text-zinc-600 font-mono text-sm pr-2">.json</span>
             </div>
           </div>
-          <p className="text-[10px] text-zinc-600 px-1 leading-relaxed">
-            保存されたデータは、この端末または他の端末の「データを読み込む」ボタンからいつでも復元できます。
-          </p>
-          <div className="flex gap-3 pt-2">
+
+          <div className="space-y-3 pt-2">
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <input 
+                type="checkbox" 
+                checked={encryptBackup}
+                onChange={e => setEncryptBackup(e.target.checked)}
+                className="w-4 h-4 rounded border-zinc-800 bg-zinc-950 text-blue-600 focus:ring-blue-500/20"
+              />
+              <span className="text-sm font-medium text-zinc-300 group-hover:text-zinc-100 transition-colors">
+                バックアップ全体を暗号化する
+              </span>
+            </label>
+
+            {encryptBackup && (
+              <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                <Input
+                  label="暗号化パスワード"
+                  type="password"
+                  placeholder="バックアップ保護用"
+                  value={backupPassword}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBackupPassword(e.target.value)}
+                  description="※このパスワードを忘れると復元できません。タイトル等もすべて暗号化されます。"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-4">
             <Button variant="secondary" className="flex-1" onClick={() => setShowExportModal(false)}>キャンセル</Button>
             <Button className="flex-1" onClick={handleExport}>保存する</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Import Password Modal */}
+      <Modal 
+        isOpen={showImportPasswordModal} 
+        onClose={() => setShowImportPasswordModal(false)} 
+        title="バックアップの復号"
+      >
+        <div className="space-y-4 p-1">
+          <p className="text-sm text-zinc-400 leading-relaxed px-1">
+            このバックアップファイルは暗号化されています。復号パスワードを入力してください。
+          </p>
+          <Input
+            label="パスワード"
+            type="password"
+            placeholder="暗号化時のパスワード"
+            value={importPassword}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setImportPassword(e.target.value)}
+            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && processImport(pendingImportJson!, importPassword)}
+          />
+          {importError && (
+            <p className="text-xs text-red-500 px-1 font-medium">{importError}</p>
+          )}
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setShowImportPasswordModal(false)}>キャンセル</Button>
+            <Button className="flex-1" onClick={() => processImport(pendingImportJson!, importPassword)}>復元する</Button>
           </div>
         </div>
       </Modal>

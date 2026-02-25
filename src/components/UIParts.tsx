@@ -69,9 +69,10 @@ export function Button({
 }
 
 /* ── Input ── */
-export function Input({ label, error, ...props }: React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement> & {
+export function Input({ label, error, description, ...props }: React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement> & {
   label?: string;
   error?: string;
+  description?: string;
   rows?: number;
 }) {
   const Component = props.type === 'textarea' ? 'textarea' : 'input';
@@ -87,6 +88,7 @@ export function Input({ label, error, ...props }: React.InputHTMLAttributes<HTML
         )}
       />
       {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
+      {description && <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">{description}</p>}
     </div>
   );
 }
