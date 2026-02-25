@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { CreateItem } from './components/CreateItem';
 import { Scanner } from './components/Scanner';
@@ -5,7 +6,7 @@ import { ItemView } from './components/ItemView';
 import { type VaultItem } from './lib/db';
 import { Shield, Lock } from 'lucide-react';
 import { useInactivity } from './hooks/useInactivity';
-import { verifyBiometrics, clearBiometrics } from './lib/auth';
+import { verifyBiometrics } from './lib/auth';
 import { Button } from './components/UIParts';
 
 type View = 'dashboard' | 'create' | 'scan' | 'view';
@@ -34,7 +35,7 @@ function App() {
 
   const handleItemUpdated = (updatedItem: VaultItem) => {
     setSelectedItem(updatedItem);
-    setRefreshKey(prev => prev + 1);
+    setRefreshKey((prev: number) => prev + 1);
   };
 
   const handleUnlock = async () => {
