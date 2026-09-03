@@ -3,7 +3,7 @@ import { type VaultItem } from '../lib/db';
 import { Button, Card, Input, DEFAULT_CATEGORIES, Modal } from './UIParts';
 import { decryptData, encryptData } from '../lib/crypto';
 import { verifyBiometrics } from '../lib/auth';
-import { ArrowLeft, EyeOff, Key, Fingerprint, Copy, Check, AlertCircle, QrCode, Pencil, Lock as LockIcon } from 'lucide-react';
+import { ArrowLeft, EyeOff, Key, Fingerprint, Copy, Check, AlertCircle, QrCode, Pencil, Lock as LockIcon, FileText, Save, X } from 'lucide-react';
 import { cn } from './UIParts';
 import QRCode from 'qrcode';
 import { isWebAuthnAvailable, registerBiometrics } from '../lib/auth';
@@ -24,6 +24,15 @@ export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
   const [showQr, setShowQr] = useState(false);
   const [qrBlobUrl, setQrBlobUrl] = useState<string | null>(null);
   const [isBioAvailable, setIsBioAvailable] = useState(false);
+  // 復号に使ったパスワード（内容編集時の再暗号化に使う）
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [encryptedData, setEncryptedData] = useState(item.encryptedData);
+
+  // 記録内容の編集
+  const [isEditingSeed, setIsEditingSeed] = useState(false);
+  const [editSeed, setEditSeed] = useState('');
+  const [seedError, setSeedError] = useState<string | null>(null);
+  const [isSavingSeed, setIsSavingSeed] = useState(false);
 
   // Inline editing state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -64,37 +73,34 @@ export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
     await db.vault_items.update(item.id, { title: trimmed });
     setCurrentTitle(trimmed);
     setIsEditingTitle(false);
-    onItemUpdated?.({ ...item, title: trimmed, category: currentCategory });
+    onItemUpdated?.({ ...item, title: trimmed, category: currentCategory, encryptedData });
   };
 
   const handleCategoryChange = async (newCategory: string) => {
     if (newCategory === currentCategory) return;
     await db.vault_items.update(item.id, { category: newCategory });
     setCurrentCategory(newCategory);
-    onItemUpdated?.({ ...item, title: currentTitle, category: newCategory });
+    onItemUpdated?.({ ...item, title: currentTitle, category: newCategory, encryptedData });
   };
 
   useEffect(() => {
-    if (decryptedSeed) {
-      const timer = setTimeout(() => {
-        setDecryptedSeed(null);
-        setShowQr(false);
-      }, 2 * 60 * 1000);
-      return () => {
-        clearTimeout(timer);
-        setDecryptedSeed(null);
-        setShowQr(false);
-      };
-    }
+    if (!decryptedSeed) return;
+    const timer = setTimeout(() => {
+      setDecryptedSeed(null);
+      setShowQr(false);
+      setIsEditingSeed(false);
+      setUnlockPassword('');
+    }, 2 * 60 * 1000);
+    return () => clearTimeout(timer);
   }, [decryptedSeed]);
 
   useEffect(() => {
     if (showQr && !qrBlobUrl) {
       const qrData = JSON.stringify({
         v: 1,
-        t: item.title,
-        c: item.category,
-        d: item.encryptedData
+        t: currentTitle,
+        c: currentCategory,
+        d: encryptedData
       });
 
       QRCode.toDataURL(qrData, {
@@ -103,14 +109,15 @@ export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
         color: { dark: '#000000', light: '#ffffff' }
       }).then(setQrBlobUrl);
     }
-  }, [showQr, item, qrBlobUrl]);
+  }, [showQr, currentTitle, currentCategory, encryptedData, qrBlobUrl]);
 
   const handleManualDecrypt = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
-      const seed = await decryptData(item.encryptedData, password);
+      const seed = await decryptData(encryptedData, password);
       setDecryptedSeed(seed);
+      setUnlockPassword(password);
     } catch (err: any) {
       setError(err.message || '復号に失敗しました');
     }
@@ -121,12 +128,58 @@ export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
     setError(null);
     try {
       const bioPassword = await verifyBiometrics(item.id);
-      const seed = await decryptData(item.encryptedData, bioPassword);
+      const seed = await decryptData(encryptedData, bioPassword);
       setDecryptedSeed(seed);
+      setUnlockPassword(bioPassword);
     } catch {
       setError('生体認証に失敗しました。パスワードを入力してください。');
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  /* ── 記録内容の編集 ── */
+  const startEditSeed = () => {
+    setEditSeed(decryptedSeed ?? '');
+    setSeedError(null);
+    setShowQr(false);
+    setIsEditingSeed(true);
+  };
+
+  const cancelEditSeed = () => {
+    setIsEditingSeed(false);
+    setEditSeed('');
+    setSeedError(null);
+  };
+
+  const handleSaveSeed = async () => {
+    setSeedError(null);
+    if (!editSeed.trim()) {
+      setSeedError('内容を入力してください');
+      return;
+    }
+    if (!unlockPassword) {
+      setSeedError('パスワードが不明なため保存できません。再度ロック解除してください。');
+      return;
+    }
+    setIsSavingSeed(true);
+    try {
+      const encrypted = await encryptData(editSeed, unlockPassword);
+      await db.vault_items.update(item.id, { encryptedData: encrypted });
+      setEncryptedData(encrypted);
+      setQrBlobUrl(null);
+      setDecryptedSeed(editSeed);
+      setIsEditingSeed(false);
+      onItemUpdated?.({
+        ...item,
+        title: currentTitle,
+        category: currentCategory,
+        encryptedData: encrypted
+      });
+    } catch (err: any) {
+      setSeedError(err.message || '保存に失敗しました');
+    } finally {
+      setIsSavingSeed(false);
     }
   };
 
@@ -166,6 +219,14 @@ export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
     try {
       const encrypted = await encryptData(decryptedSeed!, newPassword);
       await db.vault_items.update(item.id, { encryptedData: encrypted });
+      setEncryptedData(encrypted);
+      setQrBlobUrl(null);
+      onItemUpdated?.({
+        ...item,
+        title: currentTitle,
+        category: currentCategory,
+        encryptedData: encrypted
+      });
       
       if (item.hasBiometrics) {
         // Re-register biometrics with the new password
@@ -177,6 +238,8 @@ export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
       setConfirmNewPassword('');
       alert('パスワードを更新しました。セキュリティのためロックします。');
       setDecryptedSeed(null);
+      setIsEditingSeed(false);
+      setUnlockPassword('');
       setPassword('');
     } catch (err: any) {
       setChangePasswordError(err.message || 'パスワードの更新に失敗しました');
@@ -320,8 +383,17 @@ export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
           <Card>
             <div className="p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-zinc-400">プロパティ</label>
-                <div className="flex flex-wrap gap-2 justify-end">
+                <label className="text-sm font-medium text-zinc-400">
+                  {isEditingSeed ? '記録内容を編集' : 'プロパティ'}
+                </label>
+                <div className={cn("flex flex-wrap gap-2 justify-end", isEditingSeed && "hidden")}>
+                  <button
+                    onClick={startEditSeed}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-medium transition-colors text-zinc-300"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    内容を編集
+                  </button>
                   <button
                     onClick={() => setShowQr(!showQr)}
                     className={cn(
@@ -359,7 +431,46 @@ export function ItemView({ item, onBack, onItemUpdated }: ItemViewProps) {
                 </div>
               </div>
 
-              {showQr ? (
+              {isEditingSeed ? (
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  <Input
+                    type="textarea"
+                    rows={5}
+                    className="font-mono"
+                    placeholder="パスワード、シードフレーズ、秘密鍵などを入力..."
+                    value={editSeed}
+                    onChange={e => setEditSeed(e.target.value)}
+                    description="現在のパスワードで再暗号化して保存します。パスワード自体を変えたい場合は「パスワード変更」を使ってください。"
+                  />
+
+                  {seedError && (
+                    <div className="bg-red-900/20 border border-red-800/50 rounded-xl p-3 flex gap-3 text-red-400 text-sm">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      {seedError}
+                    </div>
+                  )}
+
+                  <div className="flex gap-3">
+                    <Button
+                      variant="secondary"
+                      className="flex-1"
+                      onClick={cancelEditSeed}
+                      disabled={isSavingSeed}
+                    >
+                      <X className="w-4 h-4" />
+                      キャンセル
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      onClick={handleSaveSeed}
+                      disabled={isSavingSeed}
+                    >
+                      <Save className="w-4 h-4" />
+                      {isSavingSeed ? '保存中...' : '保存する'}
+                    </Button>
+                  </div>
+                </div>
+              ) : showQr ? (
                 <div className="p-4 bg-white rounded-xl flex justify-center animate-in zoom-in-95 duration-200">
                   {qrBlobUrl ? (
                     <img src={qrBlobUrl} alt="Vault Item QR" className="w-full max-w-[240px]" />
